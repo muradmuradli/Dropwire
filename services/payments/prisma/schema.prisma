@@ -1,0 +1,16 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+// Placeholder model so `prisma migrate dev` has something real to apply during
+// scaffolding verification. Replace with real domain models in the next session.
+model HealthCheck {
+  id   Int    @id @default(autoincrement())
+  note String @default("ok")
+}

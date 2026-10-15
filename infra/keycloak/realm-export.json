@@ -1,0 +1,71 @@
+{
+  "realm": "dropwire",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "customer", "description": "Can browse drops and place orders" },
+      { "name": "admin", "description": "Can manage catalog, drops, and view all orders" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "dropwire-web",
+      "name": "Dropwire Web",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3100/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3100"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3100/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "customer1",
+      "email": "customer1@dropwire.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Casey",
+      "lastName": "Customer",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "customer1",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["customer"]
+    },
+    {
+      "username": "admin1",
+      "email": "admin1@dropwire.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alex",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin1",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["admin"]
+    }
+  ]
+}

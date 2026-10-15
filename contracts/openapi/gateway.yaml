@@ -1,0 +1,14 @@
+openapi: 3.1.0
+info:
+  title: Dropwire Gateway API
+  version: 0.0.1
+  description: >
+    Public HTTP surface for Dropwire. Routes, auth, and request/response shapes
+    will be filled in as catalog/drops/orders endpoints are implemented.
+paths:
+  /health:
+    get:
+      summary: Liveness/readiness check
+      responses:
+        "200":
+          description: Gateway is healthy

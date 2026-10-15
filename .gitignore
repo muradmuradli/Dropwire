@@ -1,0 +1,33 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+
+# generated contract/prisma output
+**/src/generated/
+services/*/generated/
+
+# working notes, not part of the shipped project
+notes/
+
+# pnpm
+.pnpm-store/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Prisma
+**/prisma/*.db
+
+# Next.js
+apps/web/.next/
+apps/web/out/
