@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Manrope, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
+import { ThemeProvider } from "next-themes";
+import { AuthNav } from "../components/auth-nav";
+import { AuthProvider } from "../lib/auth-context";
+import { TooltipProvider } from "../components/ui/tooltip";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
+const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage" });
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" });
 
 export const metadata: Metadata = {
   title: "Dropwire",
@@ -21,9 +19,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`h-full antialiased ${manrope.variable} ${bricolage.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+          <TooltipProvider>
+            <AuthProvider>
+              <AuthNav />
+              <main className="flex-1">{children}</main>
+            </AuthProvider>
+          </TooltipProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

@@ -1,6 +1,8 @@
 {
   "realm": "dropwire",
   "enabled": true,
+  "displayName": "Dropwire",
+  "loginTheme": "dropwire",
   "sslRequired": "none",
   "registrationAllowed": true,
   "loginWithEmailAllowed": true,
@@ -11,12 +13,26 @@
       { "name": "admin", "description": "Can manage catalog, drops, and view all orders" }
     ]
   },
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "dropwire-web",
       "name": "Dropwire Web",
       "enabled": true,
       "publicClient": true,
+      "baseUrl": "http://localhost:3100/",
       "protocol": "openid-connect",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,

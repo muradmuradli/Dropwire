@@ -4,7 +4,9 @@ import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { MeController } from './me/me.controller';
 
 @Module({
   imports: [
@@ -16,8 +18,9 @@ import { HealthModule } from './health/health.module';
       },
     }),
     HealthModule,
+    AuthModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, MeController],
   providers: [AppService],
 })
 export class AppModule {}

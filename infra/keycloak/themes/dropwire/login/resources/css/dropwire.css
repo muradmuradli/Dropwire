@@ -1,0 +1,396 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700&display=swap');
+
+/* Dropwire login theme, path 2: `template.ftl` (the page shell) is now overridden with our own
+   markup/classes (dw-*) instead of PatternFly's Login/Container/Main grid component — see
+   template.ftl's own header comment for why (path 1, CSS-only overrides on top of that grid,
+   fought PatternFly's own custom-property-driven card and lost: a floating "ghost" box and
+   off-center layout). This file styles that custom shell, plus the PatternFly form classes that
+   field.ftl/buttons.ftl (still inherited, unmodified) still emit for the actual inputs/buttons —
+   those were never the broken part, so their styling here carries over mostly unchanged.
+
+   Light/dark: mirrors apps/web/globals.css's `:root`/`.dark` split exactly (values hand-copied,
+   same reason as everything else in this file — separate CSS pipeline, no shared Tailwind theme).
+   Which one applies is decided by the inline script in template.ftl's <head>, which reads a
+   `ui_theme` query param the app appends when it sends the browser here (see auth-nav.tsx) and
+   persists it to this origin's own localStorage, since apps/web's localStorage (a different
+   origin) isn't reachable from here. */
+
+:root {
+  --dw-radius: 0.875rem;
+  --dw-background: oklch(0.975 0.004 110);
+  --dw-foreground: oklch(0.17 0.01 260);
+  --dw-muted-foreground: oklch(0.46 0.01 260);
+  --dw-border: oklch(0.89 0.006 110);
+  --dw-input: oklch(0.89 0.006 110);
+  --dw-primary: oklch(0.86 0.22 128);
+  --dw-primary-foreground: oklch(0.18 0.03 128);
+  --dw-ring: oklch(0.7 0.2 128);
+  --dw-destructive: oklch(0.58 0.22 25);
+  --dw-success: oklch(0.6 0.16 155);
+  --dw-warning: oklch(0.68 0.16 65);
+  --dw-info: oklch(0.58 0.15 245);
+  /* Matches apps/web's actual Input component: transparent in light mode (border-only), a 30%
+     wash of --dw-input in dark mode (`dark:bg-input/30`) — plain transparent reads as invisible
+     against a dark page. */
+  --dw-input-background: transparent;
+  --dw-font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --dw-font-display: "Bricolage Grotesque", "Manrope", sans-serif;
+}
+
+.dark {
+  --dw-background: oklch(0.135 0.006 260);
+  --dw-foreground: oklch(0.97 0.004 110);
+  --dw-muted-foreground: oklch(0.7 0.01 260);
+  --dw-border: oklch(0.27 0.008 260);
+  --dw-input: oklch(0.29 0.008 260);
+  --dw-primary: oklch(0.91 0.22 127);
+  --dw-primary-foreground: oklch(0.16 0.03 128);
+  --dw-ring: oklch(0.91 0.22 127);
+  --dw-destructive: oklch(0.66 0.22 25);
+  --dw-success: oklch(0.78 0.17 155);
+  --dw-warning: oklch(0.82 0.15 75);
+  --dw-info: oklch(0.74 0.13 240);
+  --dw-input-background: color-mix(in oklab, var(--dw-input) 30%, transparent);
+}
+
+html {
+  background-color: var(--dw-background);
+}
+
+body {
+  margin: 0;
+  background-color: var(--dw-background);
+  font-family: var(--dw-font-sans);
+  color: var(--dw-foreground);
+}
+
+/* ---------- page shell (template.ftl) ---------- */
+
+.dw-shell {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.dw-panel {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.dw-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 2rem;
+  font-family: var(--dw-font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* The brand mark/wordmark is wrapped in a link home when client.baseUrl is configured (see
+   template.ftl) — higher specificity than the blanket `.dw-panel a` rule below on purpose, so it
+   keeps the brand's own typography instead of picking up link-sized/weighted text. */
+.dw-brand .dw-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-decoration: none;
+}
+
+.dw-brand .dw-brand-link:hover .dw-brand-mark {
+  opacity: 0.85;
+}
+
+.dw-brand-mark {
+  display: inline-block;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: calc(var(--dw-radius) - 2px);
+  background-color: var(--dw-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23161a0e'%3E%3Cpath d='M13 2 3 14h7l-1 8 10-12h-7l1-8z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 1rem 1rem;
+}
+
+.dw-title {
+  margin: 0 0 1.75rem;
+  font-family: var(--dw-font-display);
+  font-weight: 700;
+  font-size: 2.25rem;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--dw-foreground);
+}
+
+.dw-lang-select {
+  margin-bottom: 1rem;
+}
+
+.dw-required-legend {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  color: var(--dw-muted-foreground);
+}
+
+.dw-required-mark {
+  color: var(--dw-destructive);
+}
+
+.dw-alert {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--dw-border);
+  border-radius: calc(var(--dw-radius) - 4px);
+  font-size: 0.8125rem;
+}
+
+.dw-alert-error {
+  border-color: color-mix(in oklab, var(--dw-destructive) 40%, transparent);
+  background-color: color-mix(in oklab, var(--dw-destructive) 12%, transparent);
+  color: var(--dw-destructive);
+}
+
+.dw-alert-success {
+  border-color: color-mix(in oklab, var(--dw-success) 40%, transparent);
+  background-color: color-mix(in oklab, var(--dw-success) 12%, transparent);
+  color: var(--dw-success);
+}
+
+.dw-alert-warning {
+  border-color: color-mix(in oklab, var(--dw-warning) 40%, transparent);
+  background-color: color-mix(in oklab, var(--dw-warning) 12%, transparent);
+  color: var(--dw-warning);
+}
+
+.dw-alert-info {
+  border-color: color-mix(in oklab, var(--dw-info) 40%, transparent);
+  background-color: color-mix(in oklab, var(--dw-info) 12%, transparent);
+  color: var(--dw-info);
+}
+
+.dw-btn-secondary {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--dw-border);
+  border-radius: calc(var(--dw-radius) - 4px);
+  background: transparent;
+  color: var(--dw-foreground);
+  font-family: var(--dw-font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.dw-btn-secondary:hover {
+  background-color: color-mix(in oklab, var(--dw-foreground) 6%, transparent);
+}
+
+.dw-info {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.dw-social:empty {
+  display: none;
+}
+
+/* ---------- form fields (field.ftl / buttons.ftl, inherited — still PatternFly classes) ---------- */
+
+/* The <form class="pf-v5-c-form"> itself is `display: grid; gap: 1.5rem` natively — that grid gap
+   was stacking on top of our own margin-bottom below (1.5rem + 0.75rem = ~2.25rem between every
+   field), which is the "fields too far apart" bug. One spacing source only, from here on. */
+.pf-v5-c-form {
+  display: block;
+}
+
+.pf-v5-c-form__group {
+  margin-bottom: 0.75rem;
+}
+
+.pf-v5-c-form__label {
+  margin-bottom: 0.375rem;
+}
+
+.pf-v5-c-form__label-text {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--dw-foreground);
+}
+
+/* The wrapper <span class="pf-v5-c-form-control"> is the visible input box (border, background,
+   radius); the <input> inside it must stay borderless/transparent and just fill it — giving both
+   elements a border was the "double border" bug (two concentric boxes, span outside + input
+   inside). */
+.pf-v5-c-form-control {
+  display: flex;
+  align-items: center;
+  background-color: var(--dw-input-background) !important;
+  border: 1px solid var(--dw-input) !important;
+  border-radius: calc(var(--dw-radius) - 4px) !important;
+  box-shadow: none !important;
+  height: 2.25rem;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* PatternFly's own `.pf-v5-c-form-control` draws TWO more borders via pseudo-elements on top of
+   whatever border the element itself has: `::before` (a square 3-sided border) and `::after` (a
+   square bottom-only border — its "underline" input style). Both are additional to our own
+   rounded border above, which is exactly the "2 borders, one rounded one square" + "bottom border
+   that shouldn't be there" bugs. Killing both pseudo-elements outright leaves just our one border. */
+.pf-v5-c-form-control::before,
+.pf-v5-c-form-control::after {
+  content: none !important;
+  border: none !important;
+}
+
+.pf-v5-c-form-control input,
+#kc-form-login input[type="text"],
+#kc-form-login input[type="password"] {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: var(--dw-foreground) !important;
+  font-family: var(--dw-font-sans);
+  font-size: 0.875rem;
+  height: 100%;
+  width: 100%;
+  padding: 0 0.75rem;
+  box-sizing: border-box;
+}
+
+.pf-v5-c-form-control:focus-within {
+  border-color: var(--dw-ring) !important;
+  outline: 2px solid color-mix(in oklab, var(--dw-ring) 50%, transparent);
+  outline-offset: 1px;
+}
+
+/* The password field wraps form-control + the eye-toggle button in an input-group. Moving the
+   bordered "box" chrome up to the group itself (and stripping it back off the inner form-control)
+   keeps it one visual control instead of two adjacent bordered boxes. */
+.pf-v5-c-input-group {
+  display: flex;
+  align-items: center;
+  background-color: var(--dw-input-background) !important;
+  border: 1px solid var(--dw-input) !important;
+  border-radius: calc(var(--dw-radius) - 4px) !important;
+  height: 2.25rem;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.pf-v5-c-input-group:focus-within {
+  border-color: var(--dw-ring) !important;
+  outline: 2px solid color-mix(in oklab, var(--dw-ring) 50%, transparent);
+  outline-offset: 1px;
+}
+
+.pf-v5-c-input-group .pf-v5-c-form-control {
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  height: 100%;
+}
+
+.pf-v5-c-input-group .pf-v5-c-form-control:focus-within {
+  outline: none !important;
+}
+
+.pf-v5-c-input-group__item {
+  height: 100%;
+}
+
+/* Like .pf-v5-c-form-control, PatternFly's generic .pf-v5-c-button draws its own border via an
+   ::after pseudo-element (all four sides, bottom visible by default) — same mechanism as the
+   earlier form-control fix, just on buttons. Killed here and replaced with a single left border,
+   so the toggle reads as part of the same seamless control as the password input next to it. */
+.pf-v5-c-button.pf-m-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 0.75rem;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--dw-input);
+  color: var(--dw-muted-foreground);
+}
+
+.pf-v5-c-button.pf-m-control::after {
+  content: none !important;
+  border: none !important;
+}
+
+.pf-v5-c-button.pf-m-control:hover {
+  color: var(--dw-foreground);
+}
+
+#kc-login,
+.pf-v5-c-button.pf-m-primary {
+  display: block;
+  width: 100%;
+  margin-top: 1.25rem;
+  /* Register's submit is an <input type="submit">, not a <button> — PatternFly's own cursor:
+     pointer rule is apparently scoped to the button tag, so the input was left with the plain
+     arrow cursor. Set explicitly here so both buttons behave the same regardless of tag. */
+  cursor: pointer;
+  background-color: var(--dw-primary) !important;
+  border: none;
+  border-radius: calc(var(--dw-radius) - 4px);
+  color: var(--dw-primary-foreground) !important;
+  font-family: var(--dw-font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  height: 2.5rem;
+  box-sizing: border-box;
+  transition: opacity 0.15s ease-out;
+}
+
+#kc-login:hover,
+.pf-v5-c-button.pf-m-primary:hover {
+  opacity: 0.9;
+}
+
+/* Blanket link styling for the whole panel — covers the "forgot password" link (inside the
+   password field's group), the register/"back to login" links (info section), and anything else
+   on inherited pages (reset-password, OTP, etc.) we haven't individually enumerated. Plain bold
+   text color (same as body copy), no underline, no hover state. */
+.dw-panel a {
+  color: var(--dw-foreground);
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 0.8125rem;
+}
+
+/* ---------- registration link (login.ftl's info section, inherited, unchanged) ---------- */
+
+.pf-v5-c-login__main-footer-band {
+  text-align: center;
+}
+
+/* register.ftl's "back to login" link sits in a plain form-group (not wrapped in .dw-info like
+   login's registration link is), so it needs its own top margin to clear the submit button. */
+.pf-v5-c-form__group.pf-v5-c-login__main-footer-band {
+  margin-top: 1.25rem;
+}
+
+#kc-registration span {
+  font-size: 0.8125rem;
+  color: var(--dw-muted-foreground);
+}

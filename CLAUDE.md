@@ -77,3 +77,4 @@ Each service has its own `.env.example` — copy it to `.env` before running loc
 - `docs/decisions/` — ADRs
 - `notes/PROGRESS.md` — what's done, what's next (gitignored — local working notes, not committed)
 - `notes/LEARNING.md` — beginner-friendly explainer of the concepts in this stack (also gitignored)
+- `notes/AUTH.md` — step-by-step walkthrough of the auth code actually built, file by file (also gitignored)
