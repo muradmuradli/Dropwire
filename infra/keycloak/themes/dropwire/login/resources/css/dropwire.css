@@ -232,6 +232,14 @@ body {
   color: var(--dw-foreground);
 }
 
+/* Per-field validation errors (field.ftl, e.g. "Please specify username.", invalid email format on
+   Register) — PatternFly renders these at body-text size by default, same weight as everything
+   else, so they don't read as errors at a glance. Smaller and red fixes that. */
+.pf-v5-c-helper-text__item-text.pf-m-error {
+  font-size: 0.75rem;
+  color: var(--dw-destructive);
+}
+
 /* The wrapper <span class="pf-v5-c-form-control"> is the visible input box (border, background,
    radius); the <input> inside it must stay borderless/transparent and just fill it — giving both
    elements a border was the "double border" bug (two concentric boxes, span outside + input
@@ -257,6 +265,27 @@ body {
 .pf-v5-c-form-control::after {
   content: none !important;
   border: none !important;
+}
+
+/* Keycloak marks an invalid field's wrapper with .pf-m-error, meant to redden its border — our own
+   `!important` border above was winning by default, so it never showed. Fixed for standalone
+   fields (username, email) directly below. Password/password-confirm are wrapped in an
+   input-group (see further down), where the inner form-control's border is intentionally stripped
+   to `none` and the group owns the visible border instead — so there, it's the group that needs to
+   turn red, which the second rule below handles by checking whether it contains an errored field. */
+.pf-v5-c-form-control.pf-m-error {
+  border-color: var(--dw-destructive) !important;
+}
+
+.pf-v5-c-input-group:has(.pf-v5-c-form-control.pf-m-error) {
+  border-color: var(--dw-destructive) !important;
+}
+
+/* The "!" status icon carries a top-only padding in PatternFly's own CSS, calibrated for its
+   native grid layout (aligning with a label that could wrap to multiple lines). Now that the whole
+   control is just flex-centered, that leftover top padding pushes the icon down from true center. */
+.pf-v5-c-form-control__icon {
+  padding-block-start: 0 !important;
 }
 
 .pf-v5-c-form-control input,
