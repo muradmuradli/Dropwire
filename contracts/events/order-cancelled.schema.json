@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dropwire.dev/schemas/order-cancelled.schema.json",
+  "title": "OrderCancelled",
+  "description": "Topic: order.cancelled. Producer: orders. Consumer(s): notifications. Failure-path saga terminus. `reason` is free-form, typically forwarded from the PaymentFailed that triggered this cancellation.",
+  "allOf": [
+    { "$ref": "envelope.schema.json" },
+    {
+      "properties": {
+        "type": { "const": "OrderCancelled" },
+        "payload": {
+          "type": "object",
+          "required": ["orderId", "customerId", "reason"],
+          "properties": {
+            "orderId": { "type": "string", "format": "uuid" },
+            "customerId": { "type": "string" },
+            "reason": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

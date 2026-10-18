@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dropwire.dev/schemas/envelope.schema.json",
+  "title": "EventEnvelope",
+  "description": "Common envelope every saga event shares. See docs/event-catalog.md. Each concrete event schema (order-placed.schema.json, etc.) extends this via allOf and narrows `type` to a const and `payload` to its own shape.",
+  "type": "object",
+  "required": ["id", "type", "version", "occurredAt", "correlationId", "payload"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique per event instance. Consumers dedupe by this field to stay idempotent."
+    },
+    "type": { "type": "string" },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Schema version of this event type's payload. A backwards-incompatible payload change ships as a new version (and a new schema file, e.g. order-placed.v2.schema.json) rather than editing this one in place."
+    },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "correlationId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Shared across every event in one saga instance, for tracing/log correlation."
+    },
+    "payload": {}
+  },
+  "additionalProperties": false
+}

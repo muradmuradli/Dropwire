@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dropwire.dev/schemas/inventory-reserved.schema.json",
+  "title": "InventoryReserved",
+  "description": "Topic: inventory.reserved. Producer: inventory. Consumer(s): orders, payments. Published after a successful (all-or-nothing) ReserveStock call — see contracts/proto/inventory.proto and ADR 0007. No customerId: inventory has no customer concept, by design.",
+  "allOf": [
+    { "$ref": "envelope.schema.json" },
+    {
+      "properties": {
+        "type": { "const": "InventoryReserved" },
+        "payload": {
+          "type": "object",
+          "required": ["orderId", "items"],
+          "properties": {
+            "orderId": { "type": "string", "format": "uuid" },
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "order-item.schema.json" },
+              "description": "The reserved quantities, echoed back so payments/orders don't need to call back to orders just to know what was reserved (no shared DB — see ADR 0004)."
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

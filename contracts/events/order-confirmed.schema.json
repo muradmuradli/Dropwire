@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dropwire.dev/schemas/order-confirmed.schema.json",
+  "title": "OrderConfirmed",
+  "description": "Topic: order.confirmed. Producer: orders. Consumer(s): notifications. Happy-path saga terminus. customerId travels here (not on the inventory events) since only orders has a customer concept — see docs/auth.md.",
+  "allOf": [
+    { "$ref": "envelope.schema.json" },
+    {
+      "properties": {
+        "type": { "const": "OrderConfirmed" },
+        "payload": {
+          "type": "object",
+          "required": ["orderId", "customerId"],
+          "properties": {
+            "orderId": { "type": "string", "format": "uuid" },
+            "customerId": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

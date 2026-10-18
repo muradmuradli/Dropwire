@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dropwire.dev/schemas/payment-confirmed.schema.json",
+  "title": "PaymentConfirmed",
+  "description": "Topic: payment.confirmed. Producer: payments. Consumer(s): orders. No amount/currency: payments is a mocked provider with a configurable failure rate (see services/payments/CLAUDE.md) and doesn't need real pricing to simulate an outcome. Pricing is deliberately out of scope until a catalog pricing contract is designed.",
+  "allOf": [
+    { "$ref": "envelope.schema.json" },
+    {
+      "properties": {
+        "type": { "const": "PaymentConfirmed" },
+        "payload": {
+          "type": "object",
+          "required": ["orderId", "paymentId"],
+          "properties": {
+            "orderId": { "type": "string", "format": "uuid" },
+            "paymentId": {
+              "type": "string",
+              "description": "The mock provider's own reference id for this charge."
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

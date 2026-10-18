@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package dropwire.inventory.v1;
+
+// Synchronous reservation contract called by `orders` during the saga's first step.
+// Async outcomes of these calls (`InventoryReserved`/`InventoryReleased`) are published
+// separately as Kafka events — see docs/event-catalog.md. This file only covers the
+// request/response the caller waits on.
+service InventoryService {
+  rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse);
+  rpc ReleaseStock(ReleaseStockRequest) returns (ReleaseStockResponse);
+}
+
+message StockItem {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+enum ReservationStatus {
+  RESERVATION_STATUS_UNSPECIFIED = 0;
+  RESERVATION_STATUS_RESERVED = 1;
+  RESERVATION_STATUS_OUT_OF_STOCK = 2;
+  RESERVATION_STATUS_PRODUCT_NOT_FOUND = 3;
+}
+
+message ReserveStockRequest {
+  // Doubles as the idempotency key: one order has exactly one reservation attempt, so
+  // orders never needs a separate reservationId. A retried call with the same order_id
+  // must return the same result rather than reserving twice.
+  string order_id = 1;
+  string correlation_id = 2;
+  repeated StockItem items = 3;
+}
+
+message ReserveStockItemResult {
+  string product_id = 1;
+  ReservationStatus status = 2;
+  // Only meaningful when status == RESERVATION_STATUS_OUT_OF_STOCK.
+  int32 available_quantity = 3;
+}
+
+message ReserveStockResponse {
+  // All-or-nothing: RESERVATION_STATUS_RESERVED only if every item in the request was
+  // reserved. Any other status means nothing in this request was reserved, even if some
+  // items individually had stock — the saga needs a single yes/no, not a partial
+  // reservation to track.
+  ReservationStatus status = 1;
+  repeated ReserveStockItemResult items = 2;
+}
+
+message ReleaseStockRequest {
+  // Releases exactly what was reserved under this order_id. No item list needed —
+  // inventory already recorded what it reserved when ReserveStock succeeded.
+  string order_id = 1;
+  string correlation_id = 2;
+}
+
+message ReleaseStockResponse {
+  bool released = 1;
+}

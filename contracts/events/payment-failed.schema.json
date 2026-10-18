@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dropwire.dev/schemas/payment-failed.schema.json",
+  "title": "PaymentFailed",
+  "description": "Topic: payment.failed. Producer: payments. Consumer(s): orders. Triggers the saga's compensation path (orders asks inventory to release stock, then publishes OrderCancelled). `reason` is deliberately a free-form string, not a fixed enum: it's the mock provider's own implementation detail, not a cross-service contract to lock down now.",
+  "allOf": [
+    { "$ref": "envelope.schema.json" },
+    {
+      "properties": {
+        "type": { "const": "PaymentFailed" },
+        "payload": {
+          "type": "object",
+          "required": ["orderId", "reason"],
+          "properties": {
+            "orderId": { "type": "string", "format": "uuid" },
+            "reason": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

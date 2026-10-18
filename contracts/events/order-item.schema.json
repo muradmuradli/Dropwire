@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dropwire.dev/schemas/order-item.schema.json",
+  "title": "OrderItem",
+  "description": "A single line item, shared across order-placed/inventory-reserved/inventory-released payloads. Mirrors StockItem in contracts/proto/inventory.proto, in this ecosystem's camelCase.",
+  "type": "object",
+  "required": ["productId", "quantity"],
+  "properties": {
+    "productId": { "type": "string" },
+    "quantity": { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": false
+}

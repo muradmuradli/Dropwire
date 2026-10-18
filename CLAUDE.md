@@ -67,7 +67,9 @@ Each service has its own `.env.example` — copy it to `.env` before running loc
   `fix(inventory): prevent negative stock on concurrent reserve`). Common types: `feat`, `fix`,
   `docs`, `refactor`, `test`, `chore`. Scope is usually the service name. Body (if any) explains
   *why* when it isn't obvious from the diff. Breaking changes: `!` after the scope
-  (`feat(gateway)!: ...`) or a `BREAKING CHANGE:` footer.
+  (`feat(gateway)!: ...`) or a `BREAKING CHANGE:` footer. No `Co-Authored-By` trailer — commits are
+  authored under the repo owner's identity only, regardless of any default assistant attribution
+  convention.
 
 ## Pointers
 

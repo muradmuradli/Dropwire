@@ -9,7 +9,10 @@
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "gen:contracts": "node scripts/gen-contracts.js",
+    "gen:contracts:proto": "node scripts/gen-contracts.js proto",
+    "gen:contracts:events": "node scripts/gen-contracts.js events"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -17,9 +20,12 @@
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
+    "grpc-tools": "^1.13.1",
     "jest": "^29.7.0",
+    "json-schema-to-typescript": "^16.0.0",
     "prettier": "^3.4.2",
     "ts-jest": "^29.2.5",
+    "ts-proto": "^2.18.1",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.0"
   }
