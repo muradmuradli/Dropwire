@@ -1,0 +1,1 @@
+export const INVENTORY_CLIENT = 'INVENTORY_CLIENT';

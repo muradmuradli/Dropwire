@@ -8,9 +8,32 @@ generator client {
   output   = "../generated/prisma"
 }
 
-// Placeholder model so `prisma migrate dev` has something real to apply during
-// scaffolding verification. Replace with real domain models in the next session.
-model HealthCheck {
-  id   Int    @id @default(autoincrement())
-  note String @default("ok")
+// Only the saga's first step is implemented so far: place an order, call inventory's
+// ReserveStock, record the outcome. RESERVED/CANCELLED is as far as that goes today —
+// PaymentConfirmed/PaymentFailed/OrderConfirmed will add more states once the rest of the
+// saga (and the events that drive it) exist.
+enum OrderStatus {
+  PLACED
+  RESERVED
+  CANCELLED
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  // The JWT `sub` claim, per the root CLAUDE.md's "no local user tables" rule — not yet
+  // wired to a real verified token, see services/orders/CLAUDE.md.
+  customerId    String
+  correlationId String
+  status        OrderStatus
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  items         OrderItem[]
+}
+
+model OrderItem {
+  id        Int    @id @default(autoincrement())
+  order     Order  @relation(fields: [orderId], references: [id])
+  orderId   String
+  productId String
+  quantity  Int
 }
