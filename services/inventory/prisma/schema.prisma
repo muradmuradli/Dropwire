@@ -8,9 +8,51 @@ generator client {
   output   = "../generated/prisma"
 }
 
-// Placeholder model so `prisma migrate dev` has something real to apply during
-// scaffolding verification. Replace with real domain models in the next session.
-model HealthCheck {
-  id   Int    @id @default(autoincrement())
-  note String @default("ok")
+// Overall outcome of one order's reservation attempt. PENDING is written before the
+// Redis step runs, so a crash mid-reservation leaves a durable, idempotent marker
+// instead of silently losing track of the attempt (see docs/decisions/0011).
+enum ReservationStatus {
+  PENDING
+  RESERVED
+  OUT_OF_STOCK
+  PRODUCT_NOT_FOUND
+  RELEASED
+}
+
+// Per-item diagnostic recorded alongside the overall status — an item can read
+// RESERVED here even when the order as a whole failed, since reservation is
+// all-or-nothing per docs/decisions/0007.
+enum ReservationItemStatus {
+  RESERVED
+  OUT_OF_STOCK
+  PRODUCT_NOT_FOUND
+}
+
+model Stock {
+  productId     String   @id
+  totalQuantity Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Reservation {
+  orderId       String            @id
+  correlationId String
+  status        ReservationStatus
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  items         ReservationItem[]
+}
+
+model ReservationItem {
+  id                       Int                   @id @default(autoincrement())
+  reservation              Reservation           @relation(fields: [orderId], references: [orderId])
+  orderId                  String
+  productId                String
+  quantity                 Int
+  status                   ReservationItemStatus
+  // Only meaningful when status == OUT_OF_STOCK (mirrors the proto's available_quantity).
+  availableQuantityAtCheck Int?
+
+  @@index([orderId])
 }

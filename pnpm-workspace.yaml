@@ -10,3 +10,5 @@ allowBuilds:
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - '@nestjs/microservices@11.2.8'
+overrides:
+  '@nestjs/microservices': ^11.2.8
