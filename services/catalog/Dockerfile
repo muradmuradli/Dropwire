@@ -8,6 +8,7 @@ RUN corepack enable
 FROM base AS deps
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
 COPY services/catalog/package.json services/catalog/package.json
+COPY services/catalog/prisma services/catalog/prisma
 RUN pnpm install --frozen-lockfile --filter catalog...
 
 FROM deps AS build

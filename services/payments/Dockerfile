@@ -8,6 +8,7 @@ RUN corepack enable
 FROM base AS deps
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
 COPY services/payments/package.json services/payments/package.json
+COPY services/payments/prisma services/payments/prisma
 RUN pnpm install --frozen-lockfile --filter payments...
 
 FROM deps AS build
