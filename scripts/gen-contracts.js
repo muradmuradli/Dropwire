@@ -47,8 +47,11 @@ function cleanDir(dir) {
 }
 
 function genProto() {
-  const protocBin = path.join(ROOT, 'node_modules', '.bin', 'grpc_tools_node_protoc.cmd');
-  const pluginBin = path.join(ROOT, 'node_modules', '.bin', 'protoc-gen-ts_proto.cmd');
+  // pnpm only generates the .cmd shim on Windows; Linux (and Docker builds, which are
+  // always Linux) gets the plain executable with no extension.
+  const binExt = process.platform === 'win32' ? '.cmd' : '';
+  const protocBin = path.join(ROOT, 'node_modules', '.bin', `grpc_tools_node_protoc${binExt}`);
+  const pluginBin = path.join(ROOT, 'node_modules', '.bin', `protoc-gen-ts_proto${binExt}`);
 
   for (const service of PROTO_CONSUMERS) {
     const outDir = generatedDir(service, 'proto');

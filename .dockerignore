@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/generated
+**/coverage
+**/.next
+**/.env
+**/.env.local
+.git
+proj

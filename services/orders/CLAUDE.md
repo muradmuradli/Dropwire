@@ -7,11 +7,14 @@ other service and decides what happens next. Calls inventory synchronously via g
 saga via Kafka events.
 
 **Only the saga's first step is implemented so far** (`POST /orders` in `src/orders/`): create an
-`Order`, call inventory's `ReserveStock`, record `RESERVED`/`CANCELLED` based on the result. No
-retry/recovery logic yet if the gRPC call itself fails (the order is just left `PLACED`) — that
-belongs to the full saga orchestration, not built yet. `customerId` is currently a plain request
-body field, **not** derived from a verified JWT yet — the root `CLAUDE.md`'s "JWT `sub` claim is the
-user id everywhere" rule isn't wired up here yet (see `notes/PROGRESS.md`).
+`Order`, call inventory's `ReserveStock` (retried up to 3 times, safe because that call is
+idempotent on `order_id` — see `docs/decisions/0012`), and record `RESERVED`/`CANCELLED`/
+`RESERVATION_FAILED` based on the result. `RESERVATION_FAILED` means the call itself never got a
+real answer even after retrying — a 503, not a dangling `PLACED` row. Real recovery (a background
+job that revisits `RESERVATION_FAILED` orders) still belongs to the full saga orchestration, not
+built yet. `customerId` is currently a plain request body field, **not** derived from a verified
+JWT yet — the root `CLAUDE.md`'s "JWT `sub` claim is the user id everywhere" rule isn't wired up
+here yet (see `notes/PROGRESS.md`).
 
 ## Events
 Produces: `OrderPlaced` (`order.placed`), `OrderConfirmed` (`order.confirmed`),

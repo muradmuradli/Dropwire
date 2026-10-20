@@ -9,13 +9,17 @@ generator client {
 }
 
 // Only the saga's first step is implemented so far: place an order, call inventory's
-// ReserveStock, record the outcome. RESERVED/CANCELLED is as far as that goes today —
-// PaymentConfirmed/PaymentFailed/OrderConfirmed will add more states once the rest of the
-// saga (and the events that drive it) exist.
+// ReserveStock, record the outcome. RESERVED/CANCELLED/RESERVATION_FAILED is as far as that
+// goes today — PaymentConfirmed/PaymentFailed/OrderConfirmed will add more states once the
+// rest of the saga (and the events that drive it) exist.
 enum OrderStatus {
   PLACED
   RESERVED
   CANCELLED
+  // The gRPC call to inventory itself failed (not a business "no" — a transport/infra
+  // problem), even after retrying. Distinct from CANCELLED, which means inventory
+  // answered and said no. See docs/decisions/0012.
+  RESERVATION_FAILED
 }
 
 model Order {

@@ -1,13 +1,28 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import {
   InventoryServiceClient,
   ReservationStatus,
+  ReserveStockRequest,
+  ReserveStockResponse,
 } from '../generated/proto/dropwire/inventory/v1/inventory';
 import { PrismaService } from '../prisma/prisma.service';
 import { INVENTORY_CLIENT } from './inventory-client.constant';
+
+const RESERVE_STOCK_ATTEMPTS = 3;
+const RESERVE_STOCK_RETRY_DELAY_MS = 200;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export interface PlaceOrderItem {
   productId: string;
@@ -51,17 +66,29 @@ export class OrdersService implements OnModuleInit {
     });
 
     // order_id is the idempotency key inventory keys its reservation off (see
-    // docs/decisions/0007) — generating it here, before the gRPC call, is what lets a retry
-    // of this same request (same orderId) land on the same answer instead of reserving
-    // twice. There's no retry loop here yet; a transport failure just leaves the order
-    // PLACED, to be revisited once the rest of the saga (and its recovery story) exists.
-    const reservation = await lastValueFrom(
-      this.inventoryService.reserveStock({
+    // docs/decisions/0007/0011) — generating it here, before the gRPC call, is what makes
+    // retrying this same request (same orderId) safe: inventory either hasn't seen it yet,
+    // or replays the exact same answer instead of reserving twice.
+    let reservation: ReserveStockResponse;
+    try {
+      reservation = await this.reserveStockWithRetry({
         orderId,
         correlationId: input.correlationId,
         items: input.items,
-      }),
-    );
+      });
+    } catch {
+      // Every attempt failed at the transport level (inventory unreachable, timed out,
+      // etc.) — not a business "no." Recording this honestly as its own terminal status,
+      // rather than leaving the order silently stuck at PLACED, is as far as recovery goes
+      // without the full saga orchestration (see docs/decisions/0012).
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'RESERVATION_FAILED' },
+      });
+      throw new ServiceUnavailableException(
+        `could not reach inventory to reserve stock for order ${orderId}; check GET /orders/${orderId}`,
+      );
+    }
 
     const status =
       reservation.status === ReservationStatus.RESERVATION_STATUS_RESERVED
@@ -74,6 +101,21 @@ export class OrdersService implements OnModuleInit {
     });
 
     return { order, reservation };
+  }
+
+  private async reserveStockWithRetry(request: ReserveStockRequest): Promise<ReserveStockResponse> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= RESERVE_STOCK_ATTEMPTS; attempt++) {
+      try {
+        return await lastValueFrom(this.inventoryService.reserveStock(request));
+      } catch (error) {
+        lastError = error;
+        if (attempt < RESERVE_STOCK_ATTEMPTS) {
+          await sleep(RESERVE_STOCK_RETRY_DELAY_MS);
+        }
+      }
+    }
+    throw lastError;
   }
 
   async getOrder(orderId: string) {
