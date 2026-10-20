@@ -27,3 +27,8 @@ Postgres is the source of truth, Redis is a performance cache over it, not a sec
 
 ## Port
 `3002` HTTP (see `.env.example`), `4002` gRPC (`GRPC_PORT`).
+
+## Health
+`GET /health` checks both Postgres and Redis (`RedisService.pingCheck()`), the latter with a 2s
+timeout — ioredis's own reconnect/backoff on a dropped connection can otherwise take tens of
+seconds before a queued command rejects, which defeats the point of a health check.

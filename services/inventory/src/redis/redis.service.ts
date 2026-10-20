@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { HealthIndicatorResult } from '@nestjs/terminus';
 import Redis, { Result } from 'ioredis';
 
 declare module 'ioredis' {
@@ -32,5 +33,16 @@ export class RedisService extends Redis implements OnModuleInit, OnModuleDestroy
 
   onModuleDestroy() {
     this.disconnect();
+  }
+
+  async pingCheck(): Promise<HealthIndicatorResult> {
+    // ioredis's own retry/backoff on a dropped connection can take tens of seconds before
+    // a queued command like ping() actually rejects — far too slow for a health check,
+    // which needs to fail fast regardless of how the client itself handles reconnection.
+    const timeout = new Promise((_resolve, reject) =>
+      setTimeout(() => reject(new Error('redis ping timed out')), 2000),
+    );
+    await Promise.race([this.ping(), timeout]);
+    return { redis: { status: 'up' } };
   }
 }
