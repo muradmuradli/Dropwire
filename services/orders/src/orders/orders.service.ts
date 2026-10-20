@@ -50,9 +50,7 @@ export class OrdersService implements OnModuleInit {
   }
 
   async placeOrder(input: PlaceOrderInput) {
-    if (input.items.length === 0) {
-      throw new BadRequestException('an order needs at least one item');
-    }
+    this.assertValidInput(input);
 
     const orderId = randomUUID();
     await this.prisma.order.create({
@@ -101,6 +99,25 @@ export class OrdersService implements OnModuleInit {
     });
 
     return { order, reservation };
+  }
+
+  private assertValidInput(input: PlaceOrderInput): void {
+    if (typeof input?.customerId !== 'string' || input.customerId.trim().length === 0) {
+      throw new BadRequestException('customerId is required');
+    }
+    if (!Array.isArray(input.items) || input.items.length === 0) {
+      throw new BadRequestException('an order needs at least one item');
+    }
+    for (const item of input.items) {
+      if (typeof item?.productId !== 'string' || item.productId.trim().length === 0) {
+        throw new BadRequestException('every item needs a non-empty productId');
+      }
+      if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+        throw new BadRequestException(
+          `quantity for product "${item.productId}" must be a positive whole number`,
+        );
+      }
+    }
   }
 
   private async reserveStockWithRetry(request: ReserveStockRequest): Promise<ReserveStockResponse> {
