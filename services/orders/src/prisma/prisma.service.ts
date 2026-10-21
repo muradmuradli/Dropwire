@@ -13,7 +13,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async pingCheck(): Promise<HealthIndicatorResult> {
-    await this.$queryRaw`SELECT 1`;
-    return { database: { status: 'up' } };
+    try {
+      await this.$queryRaw`SELECT 1`;
+      return { database: { status: 'up' } };
+    } catch (error) {
+      // Terminus only aggregates a check into its structured error response if the
+      // indicator function resolves with a 'down' result — a thrown/rejected error
+      // propagates straight past it into the app's generic exception handling instead.
+      return {
+        database: {
+          status: 'down',
+          message: error instanceof Error ? error.message : 'unknown error',
+        },
+      };
+    }
   }
 }

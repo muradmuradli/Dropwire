@@ -42,7 +42,19 @@ export class RedisService extends Redis implements OnModuleInit, OnModuleDestroy
     const timeout = new Promise((_resolve, reject) =>
       setTimeout(() => reject(new Error('redis ping timed out')), 2000),
     );
-    await Promise.race([this.ping(), timeout]);
-    return { redis: { status: 'up' } };
+    try {
+      await Promise.race([this.ping(), timeout]);
+      return { redis: { status: 'up' } };
+    } catch (error) {
+      // Terminus only aggregates a check into its structured error response if the
+      // indicator function resolves with a 'down' result — a thrown/rejected error
+      // propagates straight past it into the app's generic exception handling instead.
+      return {
+        redis: {
+          status: 'down',
+          message: error instanceof Error ? error.message : 'unknown error',
+        },
+      };
+    }
   }
 }

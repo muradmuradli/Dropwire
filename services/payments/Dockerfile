@@ -19,6 +19,9 @@ RUN pnpm --filter payments run build
 
 FROM base AS runtime
 ENV NODE_ENV=production
+# pnpm's node_modules are symlinks into this root-level store — without it, every
+# symlink below is dangling and nothing resolves at runtime.
+COPY --from=build /repo/node_modules /repo/node_modules
 COPY --from=build /repo/services/payments/dist /repo/services/payments/dist
 COPY --from=build /repo/services/payments/generated /repo/services/payments/generated
 COPY --from=build /repo/services/payments/node_modules /repo/services/payments/node_modules

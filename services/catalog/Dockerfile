@@ -19,6 +19,9 @@ RUN pnpm --filter catalog run build
 
 FROM base AS runtime
 ENV NODE_ENV=production
+# pnpm's node_modules are symlinks into this root-level store — without it, every
+# symlink below is dangling and nothing resolves at runtime.
+COPY --from=build /repo/node_modules /repo/node_modules
 COPY --from=build /repo/services/catalog/dist /repo/services/catalog/dist
 COPY --from=build /repo/services/catalog/generated /repo/services/catalog/generated
 COPY --from=build /repo/services/catalog/node_modules /repo/services/catalog/node_modules
