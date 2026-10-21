@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { MeController } from './me/me.controller';
+import { OrdersProxyController } from './orders-proxy/orders-proxy.controller';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { MeController } from './me/me.controller';
     HealthModule,
     AuthModule,
   ],
-  controllers: [AppController, MeController],
+  controllers: [AppController, MeController, OrdersProxyController],
   providers: [AppService],
 })
 export class AppModule {}

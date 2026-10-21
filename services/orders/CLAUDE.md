@@ -12,12 +12,20 @@ idempotent on `order_id` — see `docs/decisions/0012`), and record `RESERVED`/`
 `RESERVATION_FAILED` based on the result. `RESERVATION_FAILED` means the call itself never got a
 real answer even after retrying — a 503, not a dangling `PLACED` row. Real recovery (a background
 job that revisits `RESERVATION_FAILED` orders) still belongs to the full saga orchestration, not
-built yet. `customerId` is currently a plain request body field, **not** derived from a verified
-JWT yet — the root `CLAUDE.md`'s "JWT `sub` claim is the user id everywhere" rule isn't wired up
-here yet (see `notes/PROGRESS.md`). `POST /orders`'s body is validated by hand in
-`OrdersService.assertValidInput` (non-empty `customerId`, at least one item, each item a non-empty
-`productId` and a positive whole-number `quantity`) before anything is written to the database —
-not a DTO/class-validator pipe, since nothing else in the codebase uses that pattern yet either.
+built yet. `POST /orders`'s body is validated by hand in `OrdersService.assertValidInput` (at least
+one item, each item a non-empty `productId` and a positive whole-number `quantity`) before anything
+is written to the database — not a DTO/class-validator pipe, since nothing else in the codebase
+uses that pattern yet either.
+
+**Verifies JWTs independently** (`src/auth/`, copied from `gateway`'s pattern — same
+`JwtStrategy`/`JwtAuthGuard`/`@CurrentUser()`): both `POST /orders` and `GET /orders/:orderId` are
+guarded, and `customerId` comes from the verified `sub` claim, never the request body — satisfies
+the root `CLAUDE.md`'s "JWT `sub` claim is the user id everywhere" rule for real now. `GET
+/orders/:orderId` also checks the order's `customerId` matches the caller (`403` otherwise) — no
+admin bypass yet. This independent check matters even when `gateway` already verified the same
+token (see `notes/LEARNING.md` §5, zero trust) — confirmed by hand by calling `orders` directly,
+bypassing `gateway` entirely, and getting `401` for no-token/garbage-token exactly as if `gateway`
+weren't there.
 
 ## Events
 Produces: `OrderPlaced` (`order.placed`), `OrderConfirmed` (`order.confirmed`),
