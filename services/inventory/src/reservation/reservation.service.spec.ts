@@ -20,6 +20,7 @@ describe('ReservationService', () => {
       update: jest.Mock;
     };
     reservationItem: { groupBy: jest.Mock; createMany: jest.Mock };
+    outboxMessage: { create: jest.Mock };
     $transaction: jest.Mock;
   };
   let redis: { reserveStock: jest.Mock; releaseStock: jest.Mock; pipeline: jest.Mock };
@@ -35,6 +36,7 @@ describe('ReservationService', () => {
         update: jest.fn(),
       },
       reservationItem: { groupBy: jest.fn(), createMany: jest.fn() },
+      outboxMessage: { create: jest.fn().mockResolvedValue(undefined) },
       $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
     };
     redis = {
@@ -76,9 +78,16 @@ describe('ReservationService', () => {
       });
       expect(redis.reserveStock).toHaveBeenCalledWith('order-1', JSON.stringify(request.items));
       expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.outboxMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'InventoryReserved',
+          correlationId: 'c1',
+          payload: { orderId: 'order-1', items: [{ productId: 'p1', quantity: 2 }] },
+        }) as unknown,
+      });
     });
 
-    it('reports OUT_OF_STOCK without throwing', async () => {
+    it('reports OUT_OF_STOCK without throwing, and writes no outbox event', async () => {
       prisma.reservation.create.mockResolvedValue(undefined);
       redis.reserveStock.mockResolvedValue(
         JSON.stringify({
@@ -91,6 +100,9 @@ describe('ReservationService', () => {
 
       expect(result.status).toBe(ProtoReservationStatus.RESERVATION_STATUS_OUT_OF_STOCK);
       expect(result.items[0].availableQuantity).toBe(1);
+      // No event for a failed reservation — orders already gets the answer synchronously
+      // via the gRPC response, per docs/decisions/0007.
+      expect(prisma.outboxMessage.create).not.toHaveBeenCalled();
     });
 
     it('replays a terminal result and never touches Redis on a repeated orderId', async () => {
@@ -142,8 +154,11 @@ describe('ReservationService', () => {
   describe('releaseStock', () => {
     const request = { orderId: 'order-1', correlationId: 'c1' };
 
-    it('releases a reserved order and gives stock back', async () => {
-      prisma.reservation.findUnique.mockResolvedValue({ status: 'RESERVED' });
+    it('releases a reserved order, gives stock back, and writes an InventoryReleased event', async () => {
+      prisma.reservation.findUnique.mockResolvedValue({
+        status: 'RESERVED',
+        items: [{ productId: 'p1', quantity: 2 }],
+      });
       redis.releaseStock.mockResolvedValue(JSON.stringify({ released: true }));
       prisma.reservation.update.mockResolvedValue(undefined);
 
@@ -154,6 +169,13 @@ describe('ReservationService', () => {
       expect(prisma.reservation.update).toHaveBeenCalledWith({
         where: { orderId: 'order-1' },
         data: { status: 'RELEASED' },
+      });
+      expect(prisma.outboxMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'InventoryReleased',
+          correlationId: 'c1',
+          payload: { orderId: 'order-1', items: [{ productId: 'p1', quantity: 2 }] },
+        }) as unknown,
       });
     });
 

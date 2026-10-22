@@ -56,3 +56,23 @@ model ReservationItem {
 
   @@index([orderId])
 }
+
+// The transactional outbox (root CLAUDE.md's rule): a row here is written in the same
+// Postgres transaction as the business write it's reporting on, so "the reservation
+// succeeded" and "there's now a durable record to publish" can never disagree — even if
+// the relay (OutboxRelayService) or Kafka itself is down when the write happens. Rows are
+// marked `publishedAt`, never deleted — see docs/decisions/0013.
+model OutboxMessage {
+  id            String    @id @default(uuid())
+  // Matches the event envelope in contracts/events/envelope.schema.json — this row *is*
+  // the envelope, published verbatim by the relay.
+  type          String
+  version       Int       @default(1)
+  occurredAt    DateTime  @default(now())
+  correlationId String
+  payload       Json
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([publishedAt])
+}

@@ -94,13 +94,14 @@ export class ReservationService implements OnModuleInit {
     const raw = await this.redis.reserveStock(request.orderId, itemsJson);
     const luaResult = JSON.parse(raw) as LuaReserveResult;
 
-    await this.finalizeReservation(request.orderId, luaResult);
+    await this.finalizeReservation(request.orderId, request.correlationId, luaResult);
     return this.toReserveStockResponse(luaResult.status, luaResult.items);
   }
 
   async releaseStock(request: ReleaseStockRequest): Promise<ReleaseStockResponse> {
     const reservation = await this.prisma.reservation.findUnique({
       where: { orderId: request.orderId },
+      include: { items: true },
     });
 
     if (reservation?.status === 'PENDING') {
@@ -117,10 +118,21 @@ export class ReservationService implements OnModuleInit {
     }
 
     await this.redis.releaseStock(request.orderId);
-    await this.prisma.reservation.update({
-      where: { orderId: request.orderId },
-      data: { status: 'RELEASED' },
-    });
+    await this.prisma.$transaction([
+      this.prisma.reservation.update({
+        where: { orderId: request.orderId },
+        data: { status: 'RELEASED' },
+      }),
+      this.prisma.outboxMessage.create({
+        data: this.buildOutboxMessageData('InventoryReleased', request.correlationId, {
+          orderId: request.orderId,
+          items: reservation.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        }),
+      }),
+    ]);
     return { released: true };
   }
 
@@ -139,8 +151,8 @@ export class ReservationService implements OnModuleInit {
     }
   }
 
-  private async finalizeReservation(orderId: string, lua: LuaReserveResult) {
-    await this.prisma.$transaction([
+  private async finalizeReservation(orderId: string, correlationId: string, lua: LuaReserveResult) {
+    const ops: Prisma.PrismaPromise<unknown>[] = [
       this.prisma.reservation.update({ where: { orderId }, data: { status: lua.status } }),
       this.prisma.reservationItem.createMany({
         data: lua.items.map((item) => ({
@@ -151,7 +163,32 @@ export class ReservationService implements OnModuleInit {
           availableQuantityAtCheck: item.availableQuantity,
         })),
       }),
-    ]);
+    ];
+    if (lua.status === 'RESERVED') {
+      ops.push(
+        this.prisma.outboxMessage.create({
+          data: this.buildOutboxMessageData('InventoryReserved', correlationId, {
+            orderId,
+            items: lua.items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+          }),
+        }),
+      );
+    }
+    await this.prisma.$transaction(ops);
+  }
+
+  // Matches contracts/events/envelope.schema.json — id/occurredAt/createdAt all come from
+  // Prisma defaults, so this only needs to fill in the fields that vary per event.
+  private buildOutboxMessageData(type: string, correlationId: string, payload: object) {
+    return {
+      type,
+      version: 1,
+      correlationId,
+      payload: payload as Prisma.InputJsonValue,
+    };
   }
 
   private toReserveStockResponse(
