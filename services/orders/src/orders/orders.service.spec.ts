@@ -4,9 +4,11 @@ import { OrdersService } from './orders.service';
 
 describe('OrdersService', () => {
   let prisma: {
-    order: { create: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
+    order: { create: jest.Mock; update: jest.Mock; updateMany: jest.Mock; findUnique: jest.Mock };
+    outboxMessage: { create: jest.Mock };
+    $transaction: jest.Mock;
   };
-  let inventoryService: { reserveStock: jest.Mock };
+  let inventoryService: { reserveStock: jest.Mock; releaseStock: jest.Mock };
   let service: OrdersService;
 
   const validInput = {
@@ -20,10 +22,20 @@ describe('OrdersService', () => {
       order: {
         create: jest.fn().mockResolvedValue(undefined),
         update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...data, items: [] })),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn(),
       },
+      outboxMessage: { create: jest.fn().mockResolvedValue(undefined) },
+      $transaction: jest.fn((arg: unknown) =>
+        typeof arg === 'function'
+          ? (arg as (tx: unknown) => Promise<unknown>)(prisma)
+          : Promise.all(arg as Promise<unknown>[]),
+      ),
     };
-    inventoryService = { reserveStock: jest.fn() };
+    inventoryService = {
+      reserveStock: jest.fn(),
+      releaseStock: jest.fn().mockReturnValue(of({ released: true })),
+    };
     const inventoryClient = { getService: jest.fn().mockReturnValue(inventoryService) };
 
     service = new OrdersService(prisma as never, inventoryClient as never);
@@ -124,6 +136,115 @@ describe('OrdersService', () => {
         service.placeOrder({ ...validInput, items: [{ productId: 'p1', quantity: 0 }] }),
       ).rejects.toThrow('must be a positive whole number');
       expect(prisma.order.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handlePaymentConfirmed', () => {
+    it('transitions a RESERVED order to CONFIRMED and writes an OrderConfirmed outbox event', async () => {
+      prisma.order.findUnique.mockResolvedValue({ id: 'order-1', customerId: 'customer-1' });
+
+      await service.handlePaymentConfirmed('c1', 'order-1');
+
+      expect(prisma.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'order-1', status: 'RESERVED' },
+        data: { status: 'CONFIRMED' },
+      });
+      expect(prisma.outboxMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'OrderConfirmed',
+          correlationId: 'c1',
+          payload: { orderId: 'order-1', customerId: 'customer-1' },
+        }) as unknown,
+      });
+    });
+
+    it('is a no-op (no outbox write) when the order is not RESERVED — redelivered or duplicate event', async () => {
+      prisma.order.findUnique.mockResolvedValue({ id: 'order-1', customerId: 'customer-1' });
+      prisma.order.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.handlePaymentConfirmed('c1', 'order-1');
+
+      expect(prisma.outboxMessage.create).not.toHaveBeenCalled();
+    });
+
+    it('drops the event for an order that does not exist, without touching the transaction', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+
+      await service.handlePaymentConfirmed('c1', 'missing-order');
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handlePaymentFailed', () => {
+    it('releases stock, transitions a RESERVED order to CANCELLED, and writes an OrderCancelled outbox event', async () => {
+      prisma.order.findUnique.mockResolvedValue({ id: 'order-1', customerId: 'customer-1' });
+
+      await service.handlePaymentFailed('c1', 'order-1', 'card declined');
+
+      expect(inventoryService.releaseStock).toHaveBeenCalledWith({
+        orderId: 'order-1',
+        correlationId: 'c1',
+      });
+      expect(prisma.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'order-1', status: 'RESERVED' },
+        data: { status: 'CANCELLED' },
+      });
+      expect(prisma.outboxMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'OrderCancelled',
+          correlationId: 'c1',
+          payload: { orderId: 'order-1', customerId: 'customer-1', reason: 'card declined' },
+        }) as unknown,
+      });
+    });
+
+    it('is a no-op (no outbox write) when the order is not RESERVED — redelivered or duplicate event', async () => {
+      prisma.order.findUnique.mockResolvedValue({ id: 'order-1', customerId: 'customer-1' });
+      prisma.order.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.handlePaymentFailed('c1', 'order-1', 'card declined');
+
+      expect(prisma.outboxMessage.create).not.toHaveBeenCalled();
+    });
+
+    it('still calls ReleaseStock even when the order turns out not to be RESERVED (idempotent either way)', async () => {
+      prisma.order.findUnique.mockResolvedValue({ id: 'order-1', customerId: 'customer-1' });
+      prisma.order.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.handlePaymentFailed('c1', 'order-1', 'card declined');
+
+      expect(inventoryService.releaseStock).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries ReleaseStock on a transient failure', async () => {
+      inventoryService.releaseStock
+        .mockReturnValueOnce(throwError(() => new Error('unreachable')))
+        .mockReturnValueOnce(of({ released: true }));
+      prisma.order.findUnique.mockResolvedValue({ id: 'order-1', customerId: 'customer-1' });
+
+      await service.handlePaymentFailed('c1', 'order-1', 'card declined');
+
+      expect(inventoryService.releaseStock).toHaveBeenCalledTimes(2);
+      expect(prisma.outboxMessage.create).toHaveBeenCalled();
+    }, 10000);
+
+    it('propagates the error (and never touches the database) when every ReleaseStock retry fails', async () => {
+      inventoryService.releaseStock.mockReturnValue(throwError(() => new Error('unreachable')));
+      prisma.order.findUnique.mockResolvedValue({ id: 'order-1', customerId: 'customer-1' });
+
+      await expect(service.handlePaymentFailed('c1', 'order-1', 'card declined')).rejects.toThrow(
+        'unreachable',
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    }, 10000);
+
+    it('drops the event for an order that does not exist', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+
+      await service.handlePaymentFailed('c1', 'missing-order', 'card declined');
+
+      expect(inventoryService.releaseStock).not.toHaveBeenCalled();
     });
   });
 

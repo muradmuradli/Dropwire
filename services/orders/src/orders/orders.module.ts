@@ -5,6 +5,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { DROPWIRE_INVENTORY_V1_PACKAGE_NAME } from '../generated/proto/dropwire/inventory/v1/inventory';
 import { PrismaModule } from '../prisma/prisma.module';
 import { INVENTORY_CLIENT } from './inventory-client.constant';
+import { OrderEventsConsumer } from './order-events.consumer';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 
@@ -30,6 +31,6 @@ import { OrdersService } from './orders.service';
     ]),
   ],
   controllers: [OrdersController],
-  providers: [OrdersService],
+  providers: [OrdersService, OrderEventsConsumer],
 })
 export class OrdersModule {}

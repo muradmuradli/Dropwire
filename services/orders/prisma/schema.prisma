@@ -8,14 +8,15 @@ generator client {
   output   = "../generated/prisma"
 }
 
-// Only the saga's first step is implemented so far: place an order, call inventory's
-// ReserveStock, record the outcome. RESERVED/CANCELLED/RESERVATION_FAILED is as far as that
-// goes today — PaymentConfirmed/PaymentFailed/OrderConfirmed will add more states once the
-// rest of the saga (and the events that drive it) exist.
+// The saga's second step (consuming PaymentConfirmed/PaymentFailed, see
+// docs/decisions/0015) adds CONFIRMED — the happy-path terminus. CANCELLED now covers two
+// different triggers (inventory declining the reservation synchronously, or a later
+// PaymentFailed event) — see docs/decisions/0015 for why that's one status, not two.
 enum OrderStatus {
   PLACED
   RESERVED
   CANCELLED
+  CONFIRMED
   // The gRPC call to inventory itself failed (not a business "no" — a transport/infra
   // problem), even after retrying. Distinct from CANCELLED, which means inventory
   // answered and said no. See docs/decisions/0012.
@@ -40,4 +41,19 @@ model OrderItem {
   orderId   String
   productId String
   quantity  Int
+}
+
+// The transactional outbox (root CLAUDE.md's rule) — same pattern as inventory's/payments',
+// see docs/decisions/0013.
+model OutboxMessage {
+  id            String    @id @default(uuid())
+  type          String
+  version       Int       @default(1)
+  occurredAt    DateTime  @default(now())
+  correlationId String
+  payload       Json
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([publishedAt])
 }
