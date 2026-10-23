@@ -8,9 +8,43 @@ generator client {
   output   = "../generated/prisma"
 }
 
-// Placeholder model so `prisma migrate dev` has something real to apply during
-// scaffolding verification. Replace with real domain models in the next session.
-model HealthCheck {
-  id   Int    @id @default(autoincrement())
-  note String @default("ok")
+// One payment attempt per order — orderId is the idempotency key, same shape as
+// inventory's Reservation (docs/decisions/0011): a PENDING row is written before the mock
+// charge is "run," so a crash mid-attempt (or a redelivered Kafka message) can always be
+// recovered by retrying, never by double-charging. See docs/decisions/0014.
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+model Payment {
+  orderId           String        @id
+  correlationId     String
+  // The InventoryReserved event id that triggered this attempt — kept for audit; orderId,
+  // not this field, is what actually makes handling idempotent (see docs/decisions/0014).
+  triggeringEventId String
+  status            PaymentStatus
+  // Only set once CONFIRMED — the mock provider's own reference for this charge.
+  providerReference String?
+  // Only set once FAILED.
+  failureReason     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+// The transactional outbox (root CLAUDE.md's rule) — same pattern as inventory's, see
+// docs/decisions/0013. A row here is written in the same transaction as the Payment write
+// it reports on.
+model OutboxMessage {
+  id            String    @id @default(uuid())
+  type          String
+  version       Int       @default(1)
+  occurredAt    DateTime  @default(now())
+  correlationId String
+  payload       Json
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([publishedAt])
 }
