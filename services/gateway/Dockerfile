@@ -17,6 +17,9 @@ RUN pnpm --filter gateway run build
 
 FROM base AS runtime
 ENV NODE_ENV=production
+# pnpm's node_modules are symlinks into this root-level store — without it, every
+# symlink below is dangling and nothing resolves at runtime.
+COPY --from=build /repo/node_modules /repo/node_modules
 COPY --from=build /repo/services/gateway/dist /repo/services/gateway/dist
 COPY --from=build /repo/services/gateway/node_modules /repo/services/gateway/node_modules
 COPY --from=build /repo/services/gateway/package.json /repo/services/gateway/package.json
