@@ -16,7 +16,7 @@ COPY tsconfig.base.json ./
 COPY scripts scripts
 COPY contracts contracts
 COPY services/orders services/orders
-RUN node scripts/gen-contracts.js proto
+RUN node scripts/gen-contracts.js
 RUN pnpm --filter orders run prisma:generate
 RUN pnpm --filter orders run build
 

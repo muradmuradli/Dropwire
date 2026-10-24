@@ -13,7 +13,10 @@ RUN pnpm install --frozen-lockfile --filter payments...
 
 FROM deps AS build
 COPY tsconfig.base.json ./
+COPY scripts scripts
+COPY contracts contracts
 COPY services/payments services/payments
+RUN node scripts/gen-contracts.js events
 RUN pnpm --filter payments run prisma:generate
 RUN pnpm --filter payments run build
 
