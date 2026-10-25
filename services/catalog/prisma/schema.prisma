@@ -8,9 +8,34 @@ generator client {
   output   = "../generated/prisma"
 }
 
-// Placeholder model so `prisma migrate dev` has something real to apply during
-// scaffolding verification. Replace with real domain models in the next session.
-model HealthCheck {
-  id   Int    @id @default(autoincrement())
-  note String @default("ok")
+// A time-boxed sale event. Status (upcoming/live/ended) is deliberately NOT a stored
+// column — it's derived from opensAt/closesAt against the current time wherever it's
+// read (see CatalogService.dropStatus). Storing it would mean a background job just to
+// flip it on schedule, for a value that's already fully determined by two timestamps.
+model Drop {
+  id        String    @id @default(uuid())
+  name      String
+  opensAt   DateTime
+  closesAt  DateTime
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// `priceCents` (not a Decimal/Float) to avoid floating-point rounding on money entirely —
+// an int number of cents is exact and matches how every other service already treats
+// quantities (plain ints, no fractional units).
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  priceCents  Int
+  // Nullable: a product can exist before being scheduled into a drop. Set null (not
+  // deleted) if its drop goes away, matching `onDelete: SetNull` below.
+  dropId      String?
+  drop        Drop?    @relation(fields: [dropId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([dropId])
 }
