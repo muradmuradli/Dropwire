@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthModule } from './health/health.module';
+import { KafkaModule } from './kafka/kafka.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { HealthModule } from './health/health.module';
       },
     }),
     HealthModule,
+    KafkaModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

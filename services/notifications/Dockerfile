@@ -12,7 +12,10 @@ RUN pnpm install --frozen-lockfile --filter notifications...
 
 FROM deps AS build
 COPY tsconfig.base.json ./
+COPY scripts scripts
+COPY contracts contracts
 COPY services/notifications services/notifications
+RUN node scripts/gen-contracts.js events
 RUN pnpm --filter notifications run build
 
 FROM base AS runtime
