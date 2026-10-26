@@ -11,16 +11,22 @@ admin-only routes. `src/me/me.controller.ts` (`GET /me`, `GET /me/admin-only`) i
 surface to exercise this. Rate limiting is not implemented yet. See `notes/AUTH.md` for a
 step-by-step walkthrough of this code.
 
-**Proxies to `orders`** (`src/orders-proxy/orders-proxy.controller.ts`) — the first real
-routing/proxying this service does, matching `docs/ARCHITECTURE.md`'s `web → gateway → orders`
-path. Route-for-route, not a generic reverse proxy (only `POST /orders` and `GET
-/orders/:orderId` exist to forward). Guarded by the same `JwtAuthGuard` — rejects unauthenticated
-requests before ever calling out to `orders` (fail fast), then forwards the `Authorization` header
-unchanged so `orders` verifies the same token again independently (zero trust, `notes/LEARNING.md`
-§5 — confirmed by hand that `orders` still rejects bad tokens even when called directly, bypassing
-`gateway` entirely). Uses `@Res()` to pass `orders`' response back byte-for-byte rather than
-re-wrapping it through `AllExceptionsFilter`, and returns `503` itself if `orders` is unreachable.
-`ORDERS_URL` (`.env.example`) points at it — `http://localhost:3003` locally.
+**Proxies to `orders` and `catalog`** (`src/orders-proxy/`, `src/catalog-proxy/`), matching
+`docs/ARCHITECTURE.md`'s `web → gateway → {orders,catalog}` paths. Both are route-for-route, not a
+generic reverse proxy, and share forwarding logic via `src/proxy/proxy.service.ts`'s
+`ProxyService` — forwards the `Authorization` header unchanged (zero trust, `notes/LEARNING.md`
+§5), passes the upstream's response back byte-for-byte via `@Res()` rather than re-wrapping it
+through `AllExceptionsFilter`, and returns a `503` naming the upstream if it's unreachable.
+- `OrdersProxyController` (`POST /orders`, `GET /orders/:orderId`) is guarded by `JwtAuthGuard` —
+  rejects unauthenticated requests before ever calling out to `orders` (fail fast; confirmed by
+  hand that `orders` still rejects bad tokens even when called directly, bypassing `gateway`
+  entirely). `ORDERS_URL` (`.env.example`) points at it — `http://localhost:3003` locally.
+- `CatalogProxyController` (`GET /products[?dropId=]`, `GET /products/:id`, `GET /drops`, `GET
+  /drops/:id`) has **no** auth guard — `catalog`'s own routes don't have one either
+  (`docs/decisions/0017` — product/drop browsing is public), so gateway doesn't invent a
+  requirement the upstream doesn't have. Forwards the query string through for `?dropId=`.
+  `CATALOG_URL` (`.env.example`) points at it — `http://localhost:3001` locally. Full reasoning in
+  [`docs/decisions/0018`](../../docs/decisions/0018-gateway-catalog-proxy.md).
 
 **Automated e2e coverage exists** (`test/me.e2e-spec.ts`): no live Keycloak needed — it spins up a
 throwaway local HTTP server serving a JWKS response for an RSA key pair generated on the fly, points

@@ -5,9 +5,11 @@ import { randomUUID } from 'node:crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { CatalogProxyController } from './catalog-proxy/catalog-proxy.controller';
 import { HealthModule } from './health/health.module';
 import { MeController } from './me/me.controller';
 import { OrdersProxyController } from './orders-proxy/orders-proxy.controller';
+import { ProxyService } from './proxy/proxy.service';
 
 @Module({
   imports: [
@@ -21,7 +23,7 @@ import { OrdersProxyController } from './orders-proxy/orders-proxy.controller';
     HealthModule,
     AuthModule,
   ],
-  controllers: [AppController, MeController, OrdersProxyController],
-  providers: [AppService],
+  controllers: [AppController, MeController, OrdersProxyController, CatalogProxyController],
+  providers: [AppService, ProxyService],
 })
 export class AppModule {}
