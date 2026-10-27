@@ -13,6 +13,11 @@ store — deliberate, since this service owns no database by design and the one 
 (logging) is harmless to repeat anyway. Full reasoning in
 [`docs/decisions/0016`](../../docs/decisions/0016-notifications-consumer.md).
 
+**`GET /metrics`** (Prometheus text format): default process metrics, `http_request_duration_seconds`,
+and `notifications_sent_total{type}` in `NotificationService` (`confirmed`/`cancelled`, incremented
+only on an actual mock "send," not a duplicate-event skip). Full reasoning in
+[`docs/decisions/0019`](../../docs/decisions/0019-prometheus-metrics.md).
+
 ## Events
 Produces: none.
 Consumes: `OrderConfirmed` (`order.confirmed`), `OrderCancelled` (`order.cancelled`).

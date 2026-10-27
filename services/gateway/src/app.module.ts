@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { CatalogProxyController } from './catalog-proxy/catalog-proxy.controller';
 import { HealthModule } from './health/health.module';
 import { MeController } from './me/me.controller';
+import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware';
+import { MetricsModule } from './metrics/metrics.module';
 import { OrdersProxyController } from './orders-proxy/orders-proxy.controller';
 import { ProxyService } from './proxy/proxy.service';
 
@@ -21,9 +23,14 @@ import { ProxyService } from './proxy/proxy.service';
       },
     }),
     HealthModule,
+    MetricsModule,
     AuthModule,
   ],
   controllers: [AppController, MeController, OrdersProxyController, CatalogProxyController],
   providers: [AppService, ProxyService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(HttpMetricsMiddleware).forRoutes('*');
+  }
+}

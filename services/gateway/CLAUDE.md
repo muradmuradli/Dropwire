@@ -35,6 +35,12 @@ private key. Drives the real `JwtStrategy`/`JwtAuthGuard`/`RolesGuard` code (rea
 RS256 verification) rather than mocking any of it away. Covers: no token, garbage token, wrong-key
 token, valid token, and the admin-only route's 403/401/200 branches.
 
+**`GET /metrics`** (Prometheus text format): default process metrics, `http_request_duration_seconds`
+(covers proxy routes too — the whole forward-and-respond cycle counts as the request), and
+`gateway_proxy_requests_total{service,status}` in `ProxyService` (`status` is the upstream's real
+HTTP status, or `unreachable` on the `503` path). Full reasoning in
+[`docs/decisions/0019`](../../docs/decisions/0019-prometheus-metrics.md).
+
 ## Events
 Produces: none.
 Consumes: none. (Gateway talks to other services synchronously over HTTP/gRPC, not via Kafka.)

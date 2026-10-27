@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Counter } from 'prom-client';
 import { Prisma } from '../../generated/prisma';
+import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_FAILURE_RATE = 0.3;
@@ -11,13 +13,21 @@ const SIMULATED_DECLINE_REASON = 'simulated decline (PAYMENT_FAILURE_RATE)';
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
   private readonly failureRate: number;
+  private readonly processedCounter: Counter<'status'>;
 
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService,
+    metrics: MetricsService,
   ) {
     const configured = Number(config.get<string>('PAYMENT_FAILURE_RATE'));
     this.failureRate = Number.isFinite(configured) ? configured : DEFAULT_FAILURE_RATE;
+    this.processedCounter = new Counter({
+      name: 'payments_processed_total',
+      help: 'Payment attempts by terminal outcome',
+      labelNames: ['status'],
+      registers: [metrics.registry],
+    });
   }
 
   // Triggered by a consumed InventoryReserved event (see PaymentEventsConsumer). orderId is
@@ -52,6 +62,7 @@ export class PaymentService {
           }),
         }),
       ]);
+      this.processedCounter.inc({ status: 'CONFIRMED' });
       return;
     }
 
@@ -67,6 +78,7 @@ export class PaymentService {
         }),
       }),
     ]);
+    this.processedCounter.inc({ status: 'FAILED' });
   }
 
   private async getOrCreatePendingPayment(orderId: string, correlationId: string, eventId: string) {

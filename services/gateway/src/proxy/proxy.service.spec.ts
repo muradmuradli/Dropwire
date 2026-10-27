@@ -1,5 +1,11 @@
 import type { Request, Response } from 'express';
+import { Registry } from 'prom-client';
+import { MetricsService } from '../metrics/metrics.service';
 import { ProxyService } from './proxy.service';
+
+function fakeMetrics() {
+  return { registry: new Registry() } as unknown as MetricsService;
+}
 
 describe('ProxyService', () => {
   const makeResponse = () => ({
@@ -27,7 +33,7 @@ describe('ProxyService', () => {
   });
 
   it('forwards method, path, and body to the upstream URL', async () => {
-    const service = new ProxyService();
+    const service = new ProxyService(fakeMetrics());
     const fetchMock = jest.fn().mockResolvedValue({
       status: 200,
       text: () => Promise.resolve('{"ok":true}'),
@@ -55,7 +61,7 @@ describe('ProxyService', () => {
   });
 
   it('forwards the Authorization header unchanged when present', async () => {
-    const service = new ProxyService();
+    const service = new ProxyService(fakeMetrics());
     const fetchMock = jest.fn().mockResolvedValue({
       status: 200,
       text: () => Promise.resolve('{}'),
@@ -79,7 +85,7 @@ describe('ProxyService', () => {
   });
 
   it('does not add an Authorization header when the request has none', async () => {
-    const service = new ProxyService();
+    const service = new ProxyService(fakeMetrics());
     const fetchMock = jest.fn().mockResolvedValue({
       status: 200,
       text: () => Promise.resolve('{}'),
@@ -104,7 +110,7 @@ describe('ProxyService', () => {
 
   it('returns a 503 naming the upstream service when fetch rejects', async () => {
     installFetchMock(jest.fn().mockRejectedValue(new Error('ECONNREFUSED')));
-    const service = new ProxyService();
+    const service = new ProxyService(fakeMetrics());
     const response = makeResponse();
 
     await service.forward(

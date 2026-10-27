@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -6,6 +6,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthModule } from './health/health.module';
 import { KafkaModule } from './kafka/kafka.module';
+import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware';
+import { MetricsModule } from './metrics/metrics.module';
 import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
@@ -18,10 +20,15 @@ import { NotificationsModule } from './notifications/notifications.module';
       },
     }),
     HealthModule,
+    MetricsModule,
     KafkaModule,
     NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(HttpMetricsMiddleware).forRoutes('*');
+  }
+}

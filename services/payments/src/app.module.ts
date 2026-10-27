@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
@@ -7,6 +7,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthModule } from './health/health.module';
 import { KafkaModule } from './kafka/kafka.module';
+import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware';
+import { MetricsModule } from './metrics/metrics.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { PaymentModule } from './payment/payment.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -23,6 +25,7 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     HealthModule,
     PrismaModule,
+    MetricsModule,
     KafkaModule,
     OutboxModule,
     PaymentModule,
@@ -30,4 +33,8 @@ import { PrismaModule } from './prisma/prisma.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(HttpMetricsMiddleware).forRoutes('*');
+  }
+}

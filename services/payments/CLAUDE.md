@@ -14,6 +14,11 @@ ids directly, why a thrown processing error is left to retry but a malformed mes
 why raw `kafkajs` for the consumer too) in
 [`docs/decisions/0014`](../../docs/decisions/0014-payments-mock-provider.md).
 
+**`GET /metrics`** (Prometheus text format): default process metrics, `http_request_duration_seconds`,
+and `payments_processed_total{status}` in `PaymentService` (`CONFIRMED`/`FAILED`, incremented once
+per fresh charge attempt, never on the redelivered-event no-op). Full reasoning in
+[`docs/decisions/0019`](../../docs/decisions/0019-prometheus-metrics.md).
+
 ## Events
 Produces: `PaymentConfirmed` (`payment.confirmed`), `PaymentFailed` (`payment.failed`).
 Consumes: `InventoryReserved` (`inventory.reserved`) — triggers a payment attempt.

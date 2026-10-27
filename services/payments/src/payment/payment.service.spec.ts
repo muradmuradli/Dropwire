@@ -1,4 +1,6 @@
+import { Registry } from 'prom-client';
 import { Prisma } from '../../generated/prisma';
+import { MetricsService } from '../metrics/metrics.service';
 import { PaymentService } from './payment.service';
 
 function p2002() {
@@ -10,6 +12,12 @@ function p2002() {
 
 function configService(failureRate?: string) {
   return { get: jest.fn().mockReturnValue(failureRate) } as never;
+}
+
+// A fresh real Registry per call (not shared across the file's many PaymentService
+// instantiations) — re-registering the same counter name on one shared registry would throw.
+function fakeMetrics() {
+  return { registry: new Registry() } as unknown as MetricsService;
 }
 
 describe('PaymentService', () => {
@@ -28,7 +36,7 @@ describe('PaymentService', () => {
   });
 
   it('confirms the payment and writes a PaymentConfirmed outbox event when the random roll succeeds', async () => {
-    const service = new PaymentService(prisma as never, configService('0'));
+    const service = new PaymentService(prisma as never, configService('0'), fakeMetrics());
     prisma.payment.create.mockResolvedValue(undefined);
 
     await service.handleInventoryReserved('event-1', 'c1', 'order-1');
@@ -55,7 +63,7 @@ describe('PaymentService', () => {
   });
 
   it('fails the payment and writes a PaymentFailed outbox event when the random roll fails', async () => {
-    const service = new PaymentService(prisma as never, configService('1'));
+    const service = new PaymentService(prisma as never, configService('1'), fakeMetrics());
     prisma.payment.create.mockResolvedValue(undefined);
 
     await service.handleInventoryReserved('event-1', 'c1', 'order-1');
@@ -73,7 +81,7 @@ describe('PaymentService', () => {
   });
 
   it('is a no-op for a redelivered event once the order already has a terminal payment', async () => {
-    const service = new PaymentService(prisma as never, configService('0'));
+    const service = new PaymentService(prisma as never, configService('0'), fakeMetrics());
     prisma.payment.create.mockRejectedValue(p2002());
     prisma.payment.findUniqueOrThrow.mockResolvedValue({ status: 'CONFIRMED' });
 
@@ -83,7 +91,7 @@ describe('PaymentService', () => {
   });
 
   it('retries the charge for an order stuck PENDING (simulated crash recovery)', async () => {
-    const service = new PaymentService(prisma as never, configService('0'));
+    const service = new PaymentService(prisma as never, configService('0'), fakeMetrics());
     prisma.payment.create.mockRejectedValue(p2002());
     prisma.payment.findUniqueOrThrow.mockResolvedValue({ status: 'PENDING' });
 
@@ -96,7 +104,7 @@ describe('PaymentService', () => {
   });
 
   it('rethrows a database error unrelated to the idempotency key', async () => {
-    const service = new PaymentService(prisma as never, configService('0'));
+    const service = new PaymentService(prisma as never, configService('0'), fakeMetrics());
     prisma.payment.create.mockRejectedValue(new Error('connection lost'));
 
     await expect(service.handleInventoryReserved('event-1', 'c1', 'order-1')).rejects.toThrow(
@@ -105,7 +113,7 @@ describe('PaymentService', () => {
   });
 
   it('falls back to the default failure rate when PAYMENT_FAILURE_RATE is not a number', async () => {
-    const service = new PaymentService(prisma as never, configService(undefined));
+    const service = new PaymentService(prisma as never, configService(undefined), fakeMetrics());
     prisma.payment.create.mockResolvedValue(undefined);
     const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5);
 

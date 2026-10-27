@@ -1,12 +1,18 @@
 import { Logger } from '@nestjs/common';
+import { Registry } from 'prom-client';
+import { MetricsService } from '../metrics/metrics.service';
 import { NotificationService } from './notification.service';
+
+function fakeMetrics() {
+  return { registry: new Registry() } as unknown as MetricsService;
+}
 
 describe('NotificationService', () => {
   let service: NotificationService;
   let logSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    service = new NotificationService();
+    service = new NotificationService(fakeMetrics());
     logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
   });
 

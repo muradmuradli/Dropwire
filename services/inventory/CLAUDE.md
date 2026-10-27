@@ -32,6 +32,14 @@ the live `stock:{productId}` counters, reseeded from Postgres on every boot — 
 source of truth, Redis is a performance cache over it, not a second one. No `Product`/`Drop` data
 lives here; `catalog` owns that, referenced only by `productId` string, no FK.
 
+**`GET /metrics`** (Prometheus text format): default process metrics, `http_request_duration_seconds`
+for the HTTP side, and two business counters next to `ReservationService`'s logic —
+`inventory_reservations_total{status}` (incremented once per fresh `ReserveStock` terminal outcome,
+never on an idempotent replay) and `inventory_releases_total` (once per actual `ReleaseStock`, not
+the no-op path). Doesn't cover gRPC call duration — `HttpMetricsMiddleware` only wraps the HTTP
+transport. Full reasoning in
+[`docs/decisions/0019`](../../docs/decisions/0019-prometheus-metrics.md).
+
 ## Port
 `3002` HTTP (see `.env.example`), `4002` gRPC (`GRPC_PORT`).
 

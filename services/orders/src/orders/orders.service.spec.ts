@@ -1,6 +1,12 @@
 import { of, throwError } from 'rxjs';
+import { Registry } from 'prom-client';
 import { ReservationStatus } from '../generated/proto/dropwire/inventory/v1/inventory';
+import { MetricsService } from '../metrics/metrics.service';
 import { OrdersService } from './orders.service';
+
+function fakeMetrics() {
+  return { registry: new Registry() } as unknown as MetricsService;
+}
 
 describe('OrdersService', () => {
   let prisma: {
@@ -38,7 +44,7 @@ describe('OrdersService', () => {
     };
     const inventoryClient = { getService: jest.fn().mockReturnValue(inventoryService) };
 
-    service = new OrdersService(prisma as never, inventoryClient as never);
+    service = new OrdersService(prisma as never, inventoryClient as never, fakeMetrics());
     service.onModuleInit();
   });
 

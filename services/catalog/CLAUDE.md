@@ -25,10 +25,14 @@ computed correctly against real timestamps, `null` `dropId` on the unscheduled p
 structured `404` (via the existing `AllExceptionsFilter`) for an unknown id. Test data cleaned up
 afterward.
 
-**Not done**: `gateway` doesn't proxy to these routes yet (still only proxies to `orders`) — a
-separate, later step. No write endpoints (`POST`/`PATCH` for products/drops) either; nothing yet
-needs to create catalog data outside of a seed/migration, so there's no real requirement driving
-their design.
+`gateway` now proxies to all four routes (`docs/decisions/0018`). Still not done: no write
+endpoints (`POST`/`PATCH` for products/drops) — nothing yet needs to create catalog data outside of
+a seed/migration, so there's no real requirement driving their design.
+
+**`GET /metrics`** (Prometheus text format): default process metrics plus
+`http_request_duration_seconds`. No business-specific counters here — the HTTP histogram is the
+whole signal for a read-only service. Full reasoning in
+[`docs/decisions/0019`](../../docs/decisions/0019-prometheus-metrics.md).
 
 ## Events
 Produces: none yet.

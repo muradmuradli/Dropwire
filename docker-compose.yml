@@ -10,6 +10,7 @@ volumes:
   orders-db-data:
   payments-db-data:
   keycloak-db-data:
+  grafana-data:
 
 services:
   redpanda:
@@ -183,3 +184,37 @@ services:
       timeout: 5s
       retries: 20
       start_period: 30s
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: dropwire-prometheus
+    volumes:
+      - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    # App services run on the host during local dev, not in this compose network —
+    # host.docker.internal is how prometheus.yml's scrape targets reach back out to them.
+    # Docker Desktop (Windows/Mac) provides this automatically; this entry is what makes the
+    # same compose file also work on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - dropwire
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: dropwire-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3200:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - dropwire

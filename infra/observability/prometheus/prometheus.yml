@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  # Every app service runs on the host during local dev (pnpm --filter <svc> run start:dev),
+  # not inside this compose network — host.docker.internal is how a container reaches back
+  # out to the host on Docker Desktop. On Linux this needs the extra_hosts entry below.
+  - job_name: gateway
+    static_configs:
+      - targets: ["host.docker.internal:3000"]
+  - job_name: catalog
+    static_configs:
+      - targets: ["host.docker.internal:3001"]
+  - job_name: inventory
+    static_configs:
+      - targets: ["host.docker.internal:3002"]
+  - job_name: orders
+    static_configs:
+      - targets: ["host.docker.internal:3003"]
+  - job_name: payments
+    static_configs:
+      - targets: ["host.docker.internal:3004"]
+  - job_name: notifications
+    static_configs:
+      - targets: ["host.docker.internal:3005"]

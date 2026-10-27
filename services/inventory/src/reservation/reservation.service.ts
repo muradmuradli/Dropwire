@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { status as GrpcStatus } from '@grpc/grpc-js';
+import { Counter } from 'prom-client';
+import { MetricsService } from '../metrics/metrics.service';
 import {
   ReleaseStockRequest,
   ReleaseStockResponse,
@@ -36,11 +38,26 @@ const STATUS_TO_PROTO: Record<ReservationItemStatus | ReservationStatus, ProtoRe
 @Injectable()
 export class ReservationService implements OnModuleInit {
   private readonly logger = new Logger(ReservationService.name);
+  private readonly reservationsCounter: Counter<'status'>;
+  private readonly releasesCounter: Counter<string>;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-  ) {}
+    metrics: MetricsService,
+  ) {
+    this.reservationsCounter = new Counter({
+      name: 'inventory_reservations_total',
+      help: 'ReserveStock attempts by terminal status',
+      labelNames: ['status'],
+      registers: [metrics.registry],
+    });
+    this.releasesCounter = new Counter({
+      name: 'inventory_releases_total',
+      help: 'Stock actually released back via ReleaseStock',
+      registers: [metrics.registry],
+    });
+  }
 
   // Redis is a performance cache over Postgres's durable stock ledger, not the source of
   // truth — reseed it from Postgres on every boot rather than trusting whatever (if
@@ -118,6 +135,7 @@ export class ReservationService implements OnModuleInit {
     }
 
     await this.redis.releaseStock(request.orderId);
+    this.releasesCounter.inc();
     await this.prisma.$transaction([
       this.prisma.reservation.update({
         where: { orderId: request.orderId },
@@ -178,6 +196,7 @@ export class ReservationService implements OnModuleInit {
       );
     }
     await this.prisma.$transaction(ops);
+    this.reservationsCounter.inc({ status: lua.status });
   }
 
   // Matches contracts/events/envelope.schema.json — id/occurredAt/createdAt all come from

@@ -1,7 +1,13 @@
 import { status as GrpcStatus } from '@grpc/grpc-js';
+import { Registry } from 'prom-client';
 import { ReservationStatus as ProtoReservationStatus } from '../generated/proto/dropwire/inventory/v1/inventory';
 import { Prisma } from '../../generated/prisma';
+import { MetricsService } from '../metrics/metrics.service';
 import { ReservationService } from './reservation.service';
+
+function fakeMetrics() {
+  return { registry: new Registry() } as unknown as MetricsService;
+}
 
 function p2002() {
   return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
@@ -44,7 +50,7 @@ describe('ReservationService', () => {
       releaseStock: jest.fn(),
       pipeline: jest.fn(),
     };
-    service = new ReservationService(prisma as never, redis as never);
+    service = new ReservationService(prisma as never, redis as never, fakeMetrics());
   });
 
   describe('reserveStock', () => {

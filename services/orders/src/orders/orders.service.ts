@@ -9,12 +9,14 @@ import {
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
+import { Counter } from 'prom-client';
 import {
   InventoryServiceClient,
   ReservationStatus,
   ReserveStockResponse,
 } from '../generated/proto/dropwire/inventory/v1/inventory';
 import { Prisma } from '../../generated/prisma';
+import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { INVENTORY_CLIENT } from './inventory-client.constant';
 
@@ -40,11 +42,27 @@ export interface PlaceOrderInput {
 export class OrdersService implements OnModuleInit {
   private readonly logger = new Logger(OrdersService.name);
   private inventoryService!: InventoryServiceClient;
+  private readonly placedCounter: Counter<'status'>;
+  private readonly sagaOutcomesCounter: Counter<'status'>;
 
   constructor(
     private readonly prisma: PrismaService,
     @Inject(INVENTORY_CLIENT) private readonly inventoryClient: ClientGrpc,
-  ) {}
+    metrics: MetricsService,
+  ) {
+    this.placedCounter = new Counter({
+      name: 'orders_placed_total',
+      help: 'POST /orders outcomes, right after the synchronous ReserveStock call',
+      labelNames: ['status'],
+      registers: [metrics.registry],
+    });
+    this.sagaOutcomesCounter = new Counter({
+      name: 'orders_saga_outcomes_total',
+      help: 'Terminal saga outcomes reached via PaymentConfirmed/PaymentFailed',
+      labelNames: ['status'],
+      registers: [metrics.registry],
+    });
+  }
 
   onModuleInit() {
     this.inventoryService =
@@ -89,6 +107,7 @@ export class OrdersService implements OnModuleInit {
         where: { id: orderId },
         data: { status: 'RESERVATION_FAILED' },
       });
+      this.placedCounter.inc({ status: 'RESERVATION_FAILED' });
       throw new ServiceUnavailableException(
         `could not reach inventory to reserve stock for order ${orderId}; check GET /orders/${orderId}`,
       );
@@ -103,6 +122,7 @@ export class OrdersService implements OnModuleInit {
       data: { status },
       include: { items: true },
     });
+    this.placedCounter.inc({ status });
 
     return { order, reservation };
   }
@@ -174,6 +194,7 @@ export class OrdersService implements OnModuleInit {
           customerId: order.customerId,
         }),
       });
+      this.sagaOutcomesCounter.inc({ status: 'CONFIRMED' });
     });
   }
 
@@ -212,6 +233,7 @@ export class OrdersService implements OnModuleInit {
           reason,
         }),
       });
+      this.sagaOutcomesCounter.inc({ status: 'CANCELLED' });
     });
   }
 

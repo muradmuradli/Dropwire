@@ -45,7 +45,7 @@ See `docs/ARCHITECTURE.md` for diagrams and `docs/decisions/` for the ADRs behin
 
 ```sh
 pnpm install                 # install the whole workspace
-docker compose up -d         # Postgres x4, Redis, Redpanda (Kafka), Keycloak
+docker compose up -d         # Postgres x4, Redis, Redpanda (Kafka), Keycloak, Prometheus, Grafana
 
 pnpm --filter <service> run start:dev   # run one service
 pnpm -r run build            # build everything

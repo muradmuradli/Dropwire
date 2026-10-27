@@ -42,6 +42,14 @@ token (see `notes/LEARNING.md` §5, zero trust) — confirmed by hand by calling
 bypassing `gateway` entirely, and getting `401` for no-token/garbage-token exactly as if `gateway`
 weren't there.
 
+**`GET /metrics`** (Prometheus text format): default process metrics, `http_request_duration_seconds`,
+and two business counters in `OrdersService` — `orders_placed_total{status}` (right after the
+synchronous `ReserveStock` call: `RESERVED`/`CANCELLED`/`RESERVATION_FAILED`) and
+`orders_saga_outcomes_total{status}` (the async second step's terminal outcome:
+`CONFIRMED`/`CANCELLED`), both incremented only on a genuine fresh transition, never a redelivered
+duplicate. Full reasoning in
+[`docs/decisions/0019`](../../docs/decisions/0019-prometheus-metrics.md).
+
 ## Events
 Produces: `OrderConfirmed` (`order.confirmed`), `OrderCancelled` (`order.cancelled`).
 `OrderPlaced` (`order.placed`) — not implemented yet; nothing currently needs it asynchronously

@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Counter } from 'prom-client';
+import { MetricsService } from '../metrics/metrics.service';
 
 // notifications deliberately owns no database (see services/notifications/CLAUDE.md) — so
 // "dedupe by event id" (the root CLAUDE.md's rule) can't be a durable, crash-proof lookup
@@ -14,6 +16,16 @@ const RECENT_EVENT_CACHE_SIZE = 1000;
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private readonly recentlyHandledEventIds = new Map<string, true>();
+  private readonly sentCounter: Counter<'type'>;
+
+  constructor(metrics: MetricsService) {
+    this.sentCounter = new Counter({
+      name: 'notifications_sent_total',
+      help: 'Mock "emails" sent, by notification type',
+      labelNames: ['type'],
+      registers: [metrics.registry],
+    });
+  }
 
   sendOrderConfirmedEmail(eventId: string, orderId: string, customerId: string): void {
     if (this.alreadyHandled(eventId)) {
@@ -23,6 +35,7 @@ export class NotificationService {
       return;
     }
     this.logger.log(`[mock email] to customer ${customerId}: your order ${orderId} is confirmed!`);
+    this.sentCounter.inc({ type: 'confirmed' });
   }
 
   sendOrderCancelledEmail(
@@ -40,6 +53,7 @@ export class NotificationService {
     this.logger.log(
       `[mock email] to customer ${customerId}: your order ${orderId} was cancelled (${reason}).`,
     );
+    this.sentCounter.inc({ type: 'cancelled' });
   }
 
   private alreadyHandled(eventId: string): boolean {
