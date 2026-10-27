@@ -40,6 +40,12 @@ the no-op path). Doesn't cover gRPC call duration — `HttpMetricsMiddleware` on
 transport. Full reasoning in
 [`docs/decisions/0019`](../../docs/decisions/0019-prometheus-metrics.md).
 
+**Load-tested for real**: `loadtests/flash-sale.js` (k6, via Docker) drives 300 concurrent gRPC
+`ReserveStock` calls at a 50-unit product — exactly 50 `RESERVED`, 250 `OUT_OF_STOCK`, confirmed
+against real Postgres/Redis state, not just k6's own counters. This is the actual proof behind the
+root `CLAUDE.md`'s "never oversell under heavy concurrent load" claim — see
+[`docs/decisions/0020`](../../docs/decisions/0020-k6-load-tests.md) and `loadtests/README.md`.
+
 ## Port
 `3002` HTTP (see `.env.example`), `4002` gRPC (`GRPC_PORT`).
 
