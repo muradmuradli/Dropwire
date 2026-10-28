@@ -11,6 +11,7 @@ export interface Product {
   name: string;
   description: string | null;
   priceCents: number;
+  imageUrl: string | null;
   dropId: string | null;
   createdAt: string;
   updatedAt: string;

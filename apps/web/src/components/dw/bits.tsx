@@ -54,6 +54,29 @@ export function ArtTile({ id, className }: { id: string; className?: string }) {
   return <div className={cn('bg-muted', className)} style={{ backgroundImage: gradient }} />;
 }
 
+// A real product photo when one exists, the deterministic gradient fallback otherwise — most
+// products don't have one yet (catalog's imageUrl is optional, no image storage exists), so this
+// is the one place that decides between the two rather than every caller checking separately.
+// Plain <img>, not next/image: these are arbitrary hotlinked URLs, not assets this app owns, and
+// next/image would need every such domain allowlisted in next.config for no real benefit here.
+export function ProductArt({
+  imageUrl,
+  seedId,
+  alt,
+  className,
+}: {
+  imageUrl: string | null | undefined;
+  seedId: string;
+  alt: string;
+  className?: string;
+}) {
+  if (imageUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={imageUrl} alt={alt} loading="lazy" className={cn('object-cover', className)} />;
+  }
+  return <ArtTile id={seedId} className={className} />;
+}
+
 export function EmptyState({
   icon: Icon,
   title,

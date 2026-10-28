@@ -30,6 +30,10 @@ model Product {
   name        String
   description String?
   priceCents  Int
+  // A plain URL, not an uploaded/stored asset — no image storage exists in this project.
+  // Nullable: a product can exist with no image yet (the frontend falls back to a
+  // generated placeholder tile in that case).
+  imageUrl    String?
   // Nullable: a product can exist before being scheduled into a drop. Set null (not
   // deleted) if its drop goes away, matching `onDelete: SetNull` below.
   dropId      String?

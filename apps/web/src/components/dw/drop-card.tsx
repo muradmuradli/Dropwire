@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { cn } from 'cn';
 import type { Drop } from '../../lib/catalog-api';
 import { dateTime, money } from '../../lib/format';
-import { ArtTile, Pill, LiveDot } from './bits';
+import { Pill, LiveDot, ProductArt } from './bits';
 import { Countdown } from './countdown';
 
 function lowestPriceCents(drop: Drop): number | null {
@@ -22,8 +22,10 @@ export function DropCard({ drop }: { drop: Drop }) {
       )}
     >
       <div className="relative aspect-[4/3]">
-        <ArtTile
-          id={drop.id}
+        <ProductArt
+          imageUrl={drop.products[0]?.imageUrl}
+          seedId={drop.id}
+          alt={drop.name}
           className="h-full w-full transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute left-3 top-3">
