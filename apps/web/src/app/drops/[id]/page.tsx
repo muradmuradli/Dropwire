@@ -4,6 +4,7 @@ import { ArrowLeft, PackageX, TriangleAlert } from 'lucide-react';
 import { getDrop, type Drop } from '../../../lib/catalog-api';
 import { ApiError } from '../../../lib/api-error';
 import { EmptyState, LiveDot, Pill, ProductArt } from '../../../components/dw/bits';
+import { AddToCart } from '../../../components/dw/add-to-cart';
 import { Countdown } from '../../../components/dw/countdown';
 import { dateTime, money } from '../../../lib/format';
 
@@ -105,7 +106,10 @@ function DropDetail({ drop }: { drop: Drop }) {
                       <p className="mt-1 text-sm text-muted-foreground">{product.description}</p>
                     )}
                   </div>
-                  <span className="font-mono font-semibold tabular">{money(product.priceCents)}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-semibold tabular">{money(product.priceCents)}</span>
+                    {drop.status === 'LIVE' && <AddToCart product={product} dropId={drop.id} />}
+                  </div>
                 </div>
               </li>
             ))}

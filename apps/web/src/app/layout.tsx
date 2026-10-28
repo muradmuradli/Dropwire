@@ -3,6 +3,7 @@ import { Manrope, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { AuthNav } from "../components/auth-nav";
 import { AuthProvider } from "../lib/auth-context";
+import { CartProvider } from "../lib/cart-context";
 import { TooltipProvider } from "../components/ui/tooltip";
 import "./globals.css";
 
@@ -26,8 +27,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
           <TooltipProvider>
             <AuthProvider>
-              <AuthNav />
-              <main className="flex-1">{children}</main>
+              <CartProvider>
+                <AuthNav />
+                <main className="flex-1">{children}</main>
+              </CartProvider>
             </AuthProvider>
           </TooltipProvider>
         </ThemeProvider>
