@@ -40,6 +40,11 @@ export class OrdersController {
     });
   }
 
+  @Get()
+  getOrders(@CurrentUser() user: AuthenticatedUser) {
+    return this.ordersService.getOrdersForCustomer(user.userId);
+  }
+
   @Get(':orderId')
   async getOrder(@Param('orderId') orderId: string, @CurrentUser() user: AuthenticatedUser) {
     const order = await this.ordersService.getOrder(orderId);

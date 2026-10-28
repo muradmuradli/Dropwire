@@ -10,7 +10,13 @@ function fakeMetrics() {
 
 describe('OrdersService', () => {
   let prisma: {
-    order: { create: jest.Mock; update: jest.Mock; updateMany: jest.Mock; findUnique: jest.Mock };
+    order: {
+      create: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+    };
     outboxMessage: { create: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -30,6 +36,7 @@ describe('OrdersService', () => {
         update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ ...data, items: [] })),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn(),
+        findMany: jest.fn(),
       },
       outboxMessage: { create: jest.fn().mockResolvedValue(undefined) },
       $transaction: jest.fn((arg: unknown) =>
@@ -266,6 +273,22 @@ describe('OrdersService', () => {
       prisma.order.findUnique.mockResolvedValue(null);
 
       await expect(service.getOrder('missing')).resolves.toBeNull();
+    });
+  });
+
+  describe('getOrdersForCustomer', () => {
+    it('queries by customerId, newest first, capped at 50', async () => {
+      const orders = [{ id: 'order-2' }, { id: 'order-1' }];
+      prisma.order.findMany.mockResolvedValue(orders);
+
+      await expect(service.getOrdersForCustomer('customer-1')).resolves.toEqual(orders);
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith({
+        where: { customerId: 'customer-1' },
+        include: { items: true },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
     });
   });
 });

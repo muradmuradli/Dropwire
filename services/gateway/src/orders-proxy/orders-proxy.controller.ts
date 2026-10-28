@@ -30,6 +30,11 @@ export class OrdersProxyController {
     );
   }
 
+  @Get()
+  getOrders(@Req() request: Request, @Res() response: Response) {
+    return this.proxy.forward(this.ordersUrl(), 'orders', 'GET', '/orders', request, response);
+  }
+
   @Get(':orderId')
   getOrder(@Param('orderId') orderId: string, @Req() request: Request, @Res() response: Response) {
     return this.proxy.forward(

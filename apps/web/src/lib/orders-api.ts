@@ -59,5 +59,11 @@ export function useOrdersApi() {
       await throwIfNotOk(response);
       return response.json() as Promise<Order>;
     },
+
+    async listOrders(): Promise<Order[]> {
+      const response = await apiFetch('/orders');
+      await throwIfNotOk(response);
+      return response.json() as Promise<Order[]>;
+    },
   };
 }

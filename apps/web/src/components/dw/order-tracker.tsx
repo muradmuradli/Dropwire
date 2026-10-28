@@ -2,48 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CircleCheck, CircleX, Clock, PackageSearch, TriangleAlert } from 'lucide-react';
+import { PackageSearch, TriangleAlert } from 'lucide-react';
 import { useRequireAuth } from '../../lib/use-require-auth';
-import { useOrdersApi, type Order, type OrderStatus } from '../../lib/orders-api';
+import { useOrdersApi, type Order } from '../../lib/orders-api';
 import { ApiError } from '../../lib/api-error';
+import { NON_TERMINAL, ORDER_STATUS_COPY } from '../../lib/order-status';
 import { EmptyState } from './bits';
 import { Button } from '../ui/button';
 
 const POLL_INTERVAL_MS = 3000;
-
-// Only RESERVED is actually non-terminal — orders consumes PaymentConfirmed/PaymentFailed
-// asynchronously from here (docs/decisions/0015) and moves it to CONFIRMED or CANCELLED. PLACED
-// is included too as a defensive fallback even though placeOrder's synchronous response means a
-// freshly-placed order is never left at PLACED by the time this page can load it.
-const NON_TERMINAL: OrderStatus[] = ['PLACED', 'RESERVED'];
-
-const STATUS_COPY: Record<OrderStatus, { label: string; body: string; icon: React.ElementType }> = {
-  PLACED: {
-    label: 'Placed',
-    body: 'Your order was received and is being processed.',
-    icon: Clock,
-  },
-  RESERVED: {
-    label: 'Reserved — confirming payment',
-    body: 'Stock is held for this order while payment is processed. This updates automatically.',
-    icon: Clock,
-  },
-  CONFIRMED: {
-    label: 'Confirmed',
-    body: 'Payment went through — this order is complete.',
-    icon: CircleCheck,
-  },
-  CANCELLED: {
-    label: 'Cancelled',
-    body: 'This order was cancelled and any held stock was released.',
-    icon: CircleX,
-  },
-  RESERVATION_FAILED: {
-    label: 'Reservation failed',
-    body: "Inventory couldn't be reached in time to reserve stock for this order.",
-    icon: TriangleAlert,
-  },
-};
 
 export function OrderTracker({ orderId }: { orderId: string }) {
   const { initialized, authenticated } = useRequireAuth();
@@ -116,7 +83,7 @@ export function OrderTracker({ orderId }: { orderId: string }) {
     );
   }
 
-  const copy = STATUS_COPY[order.status];
+  const copy = ORDER_STATUS_COPY[order.status];
   const Icon = copy.icon;
   const polling = NON_TERMINAL.includes(order.status);
 

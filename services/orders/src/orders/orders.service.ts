@@ -165,6 +165,17 @@ export class OrdersService implements OnModuleInit {
     return this.prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
   }
 
+  // No pagination — a defensive cap, not real pagination machinery (same simplicity as
+  // catalog's GET /products/GET /drops, which have none either).
+  async getOrdersForCustomer(customerId: string) {
+    return this.prisma.order.findMany({
+      where: { customerId },
+      include: { items: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
   // Triggered by a consumed PaymentConfirmed event (see OrderEventsConsumer). The
   // conditional updateMany (not a plain update) is what makes this idempotent: it only
   // actually transitions — and only then writes the OrderConfirmed outbox row — if the
