@@ -4,6 +4,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { HealthModule } from './health/health.module';
 import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware';
@@ -21,6 +22,7 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     HealthModule,
     PrismaModule,
+    AuthModule,
     CatalogModule,
     MetricsModule,
   ],

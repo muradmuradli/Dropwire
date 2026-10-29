@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { LayoutDashboard, ListChecks, Moon, Sun, User } from 'lucide-react';
+import { CalendarClock, LayoutDashboard, ListChecks, Moon, Package, Sun, User } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 import { redirectToLogin } from '../lib/keycloak-login';
 import { Logo } from './logo';
@@ -12,6 +12,8 @@ import { Button } from './ui/button';
 const NAV_LINKS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/orders', label: 'Orders', icon: ListChecks },
+  { href: '/drops', label: 'Drops', icon: CalendarClock },
+  { href: '/products', label: 'Products', icon: Package },
 ];
 
 function ThemeToggle() {

@@ -1,12 +1,16 @@
-import { Controller, Get, Param, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { ProxyService } from '../proxy/proxy.service';
 
-// A thin, route-for-route pass-through to `catalog` — same pattern as OrdersProxyController,
-// but deliberately with no JwtAuthGuard: catalog's own routes have no auth guard either
+// A thin, route-for-route pass-through to `catalog` — same pattern as OrdersProxyController.
+// The GET routes deliberately have no guard: catalog's own GET routes don't have one either
 // (docs/decisions/0017 — product/drop browsing is public), so gateway shouldn't invent a
-// requirement the upstream service doesn't have.
+// requirement the upstream service doesn't have. The two POST routes mirror catalog's own
+// admin-only guard instead (docs/decisions/0029).
 @Controller()
 export class CatalogProxyController {
   constructor(
@@ -38,6 +42,21 @@ export class CatalogProxyController {
     );
   }
 
+  @Post('products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  createProduct(@Body() body: unknown, @Req() request: Request, @Res() response: Response) {
+    return this.proxy.forward(
+      this.catalogUrl(),
+      'catalog',
+      'POST',
+      '/products',
+      request,
+      response,
+      body,
+    );
+  }
+
   @Get('drops')
   listDrops(@Req() request: Request, @Res() response: Response) {
     return this.proxy.forward(this.catalogUrl(), 'catalog', 'GET', '/drops', request, response);
@@ -52,6 +71,21 @@ export class CatalogProxyController {
       `/drops/${id}`,
       request,
       response,
+    );
+  }
+
+  @Post('drops')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  createDrop(@Body() body: unknown, @Req() request: Request, @Res() response: Response) {
+    return this.proxy.forward(
+      this.catalogUrl(),
+      'catalog',
+      'POST',
+      '/drops',
+      request,
+      response,
+      body,
     );
   }
 

@@ -181,6 +181,9 @@ importers:
       '@nestjs/core':
         specifier: ^11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/microservices@11.2.8)(@nestjs/platform-express@11.2.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/passport':
+        specifier: ^11.0.5
+        version: 11.0.5(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(passport@0.7.0)
       '@nestjs/platform-express':
         specifier: ^11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@11.2.7)(supports-color@7.2.0)
@@ -190,9 +193,18 @@ importers:
       '@prisma/client':
         specifier: ^6.1.0
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      jwks-rsa:
+        specifier: ^3.2.2
+        version: 3.2.2(supports-color@7.2.0)
       nestjs-pino:
         specifier: ^5.3.1
         version: 5.3.1(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@11.2.7)(pino-http@10.5.0)(pino@10.4.0)(rxjs@7.8.2)
+      passport:
+        specifier: ^0.7.0
+        version: 0.7.0
+      passport-jwt:
+        specifier: ^4.0.1
+        version: 4.0.1
       pino-http:
         specifier: ^10.3.0
         version: 10.5.0
@@ -218,12 +230,24 @@ importers:
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.5
+      '@types/passport':
+        specifier: ^1.0.17
+        version: 1.0.17
+      '@types/passport-jwt':
+        specifier: ^4.0.1
+        version: 4.0.1
       '@types/supertest':
         specifier: ^7.0.0
         version: 7.2.1
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
       prisma:
         specifier: ^6.1.0
         version: 6.19.3(typescript@5.9.3)

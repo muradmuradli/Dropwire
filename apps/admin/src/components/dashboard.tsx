@@ -6,6 +6,7 @@ import { ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 import { useRequireAuth } from '../lib/use-require-auth';
 import { useAdminOrdersApi } from '../lib/admin-orders-api';
+import { listDrops, listProducts } from '../lib/catalog-api';
 import { ApiError } from '../lib/api-error';
 import { EmptyState } from './bits';
 
@@ -15,6 +16,8 @@ export function Dashboard() {
   const { listReservationFailed } = useAdminOrdersApi();
 
   const [needingAttention, setNeedingAttention] = useState<number | null>(null);
+  const [dropCount, setDropCount] = useState<number | null>(null);
+  const [productCount, setProductCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const isAdmin = keycloak?.tokenParsed?.realm_access?.roles?.includes('admin') ?? false;
@@ -27,6 +30,16 @@ export function Dashboard() {
       .then((orders) => setNeedingAttention(orders.length))
       .catch((err: unknown) => {
         setError(err instanceof ApiError ? err.message : 'failed to load the dashboard');
+      });
+    listDrops()
+      .then((drops) => setDropCount(drops.length))
+      .catch(() => {
+        /* catalog's own counts are secondary tiles — not worth a shared error state */
+      });
+    listProducts()
+      .then((products) => setProductCount(products.length))
+      .catch(() => {
+        /* same as above */
       });
     // listReservationFailed is a new function identity every render (closes over keycloak) —
     // this only needs to run once authentication/role are confirmed.
@@ -62,16 +75,32 @@ export function Dashboard() {
       )}
 
       {!error && (
-        <Link
-          href="/orders"
-          className="block max-w-sm rounded-2xl border bg-card p-6 transition-colors hover:bg-accent/50"
-        >
-          <p className="text-sm text-muted-foreground">Orders needing attention</p>
-          <p className="mt-1 text-4xl font-bold text-destructive">{needingAttention ?? '—'}</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Stuck at Reservation Failed — view worklist →
-          </p>
-        </Link>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Link
+            href="/orders"
+            className="block rounded-2xl border bg-card p-6 transition-colors hover:bg-accent/50"
+          >
+            <p className="text-sm text-muted-foreground">Orders needing attention</p>
+            <p className="mt-1 text-4xl font-bold text-destructive">{needingAttention ?? '—'}</p>
+            <p className="mt-2 text-sm text-muted-foreground">Stuck at Reservation Failed →</p>
+          </Link>
+          <Link
+            href="/drops"
+            className="block rounded-2xl border bg-card p-6 transition-colors hover:bg-accent/50"
+          >
+            <p className="text-sm text-muted-foreground">Drops</p>
+            <p className="mt-1 text-4xl font-bold">{dropCount ?? '—'}</p>
+            <p className="mt-2 text-sm text-muted-foreground">View drops →</p>
+          </Link>
+          <Link
+            href="/products"
+            className="block rounded-2xl border bg-card p-6 transition-colors hover:bg-accent/50"
+          >
+            <p className="text-sm text-muted-foreground">Products</p>
+            <p className="mt-1 text-4xl font-bold">{productCount ?? '—'}</p>
+            <p className="mt-2 text-sm text-muted-foreground">View products →</p>
+          </Link>
+        </div>
       )}
     </section>
   );

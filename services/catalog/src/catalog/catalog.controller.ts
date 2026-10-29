@@ -1,5 +1,17 @@
-import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
-import { CatalogService } from './catalog.service';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { CatalogService, type CreateDropInput, type CreateProductInput } from './catalog.service';
 
 @Controller()
 export class CatalogController {
@@ -19,6 +31,13 @@ export class CatalogController {
     return product;
   }
 
+  @Post('products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  createProduct(@Body() body: CreateProductInput) {
+    return this.catalogService.createProduct(body);
+  }
+
   @Get('drops')
   listDrops() {
     return this.catalogService.listDrops();
@@ -31,5 +50,12 @@ export class CatalogController {
       throw new NotFoundException(`no drop with id ${id}`);
     }
     return drop;
+  }
+
+  @Post('drops')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  createDrop(@Body() body: CreateDropInput) {
+    return this.catalogService.createDrop(body);
   }
 }
