@@ -57,6 +57,25 @@ export class CatalogProxyController {
     );
   }
 
+  @Post('products/upload-url')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  createProductUploadUrl(
+    @Body() body: unknown,
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    return this.proxy.forward(
+      this.catalogUrl(),
+      'catalog',
+      'POST',
+      '/products/upload-url',
+      request,
+      response,
+      body,
+    );
+  }
+
   @Get('drops')
   listDrops(@Req() request: Request, @Res() response: Response) {
     return this.proxy.forward(this.catalogUrl(), 'catalog', 'GET', '/drops', request, response);

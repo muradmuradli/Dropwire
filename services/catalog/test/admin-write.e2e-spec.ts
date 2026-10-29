@@ -1,14 +1,18 @@
 import { createServer, Server } from 'node:http';
 import { generateKeyPairSync, KeyObject, randomUUID } from 'node:crypto';
-import { INestApplication } from '@nestjs/common';
+import { BadRequestException, INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { S3Service } from '../src/s3/s3.service';
 
 // Same throwaway-JWKS technique as orders'/gateway's own e2e tests — drives the real
-// JwtStrategy/JwtAuthGuard/RolesGuard code without needing a live Keycloak.
+// JwtStrategy/JwtAuthGuard/RolesGuard code without needing a live Keycloak. S3Service itself is
+// stubbed (see beforeAll) — generating a real presigned URL needs real-looking AWS credentials
+// the test environment doesn't have, and this suite's job is proving the route's auth/validation
+// wiring, not S3 signing (that's covered by s3.service.spec.ts's own mocked-signer unit tests).
 describe('Catalog admin-write (e2e)', () => {
   const REALM = 'test-realm';
   const KID = 'test-key-1';
@@ -46,7 +50,23 @@ describe('Catalog admin-write (e2e)', () => {
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(S3Service)
+      .useValue({
+        createUploadUrl: (filename: string, contentType: string) => {
+          if (!filename) {
+            throw new BadRequestException('filename is required');
+          }
+          if (!contentType?.startsWith('image/')) {
+            throw new BadRequestException('contentType must be an image/* type');
+          }
+          return Promise.resolve({
+            uploadUrl: 'https://stub.example/upload',
+            publicUrl: 'https://stub.example/products/stub.png',
+          });
+        },
+      })
+      .compile();
     app = moduleFixture.createNestApplication();
     await app.init();
     prisma = moduleFixture.get(PrismaService);
@@ -156,6 +176,45 @@ describe('Catalog admin-write (e2e)', () => {
         .set('Authorization', `Bearer ${adminToken()}`)
         .send({ ...validProduct, dropId: randomUUID() })
         .expect(404);
+    });
+  });
+
+  describe('POST /products/upload-url', () => {
+    const validRequest = { filename: 'photo.png', contentType: 'image/png' };
+
+    it('rejects a request with no token', () => {
+      return request(app.getHttpServer())
+        .post('/products/upload-url')
+        .send(validRequest)
+        .expect(401);
+    });
+
+    it('rejects a customer-role token with 403', () => {
+      return request(app.getHttpServer())
+        .post('/products/upload-url')
+        .set('Authorization', `Bearer ${customerToken()}`)
+        .send(validRequest)
+        .expect(403);
+    });
+
+    it('returns an uploadUrl/publicUrl pair for an admin-role token', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/products/upload-url')
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send(validRequest)
+        .expect(201);
+
+      const body = res.body as { uploadUrl: string; publicUrl: string };
+      expect(body.uploadUrl).toBe('https://stub.example/upload');
+      expect(body.publicUrl).toBe('https://stub.example/products/stub.png');
+    });
+
+    it('rejects a non-image contentType with 400', () => {
+      return request(app.getHttpServer())
+        .post('/products/upload-url')
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ ...validRequest, contentType: 'application/pdf' })
+        .expect(400);
     });
   });
 });

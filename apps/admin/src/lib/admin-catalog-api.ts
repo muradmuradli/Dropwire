@@ -20,6 +20,11 @@ export interface CreateProductInput {
   dropId?: string;
 }
 
+export interface PresignedUpload {
+  uploadUrl: string;
+  publicUrl: string;
+}
+
 export function useAdminCatalogApi() {
   const apiFetch = useApiClient();
 
@@ -42,6 +47,19 @@ export function useAdminCatalogApi() {
       });
       await throwIfNotOk(response);
       return response.json() as Promise<Product>;
+    },
+
+    // Returns a presigned S3 PutObject URL — the caller PUTs the file straight to uploadUrl
+    // (not through gateway/catalog) and uses publicUrl as the product's imageUrl. See
+    // docs/decisions/0030.
+    async getUploadUrl(filename: string, contentType: string): Promise<PresignedUpload> {
+      const response = await apiFetch('/products/upload-url', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filename, contentType }),
+      });
+      await throwIfNotOk(response);
+      return response.json() as Promise<PresignedUpload>;
     },
   };
 }

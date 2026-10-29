@@ -16,7 +16,7 @@ const money = (cents: number) =>
 export function ProductsPage() {
   const { initialized, authenticated } = useRequireAuth();
   const { keycloak } = useAuth();
-  const { createProduct } = useAdminCatalogApi();
+  const { createProduct, getUploadUrl } = useAdminCatalogApi();
 
   const [products, setProducts] = useState<Product[] | null>(null);
   const [drops, setDrops] = useState<Drop[]>([]);
@@ -26,7 +26,7 @@ export function ProductsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [image, setImage] = useState<File | null>(null);
   const [dropId, setDropId] = useState('');
 
   const isAdmin = keycloak?.tokenParsed?.realm_access?.roles?.includes('admin') ?? false;
@@ -73,27 +73,45 @@ export function ProductsPage() {
     );
   }
 
+  async function uploadImage(file: File): Promise<string> {
+    const { uploadUrl, publicUrl } = await getUploadUrl(file.name, file.type);
+    const putResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    });
+    if (!putResponse.ok) {
+      // Most likely cause right now: the bucket doesn't exist yet, or its CORS policy
+      // doesn't allow PUT from this origin — both are on the AWS side, not fixable here.
+      throw new Error(`upload to S3 failed with status ${putResponse.status}`);
+    }
+    return publicUrl;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setFormError(null);
     try {
       const priceCents = Math.round(Number(price) * 100);
+      const imageUrl = image ? await uploadImage(image) : undefined;
       await createProduct({
         name,
         description: description.trim() === '' ? undefined : description,
         priceCents,
-        imageUrl: imageUrl.trim() === '' ? undefined : imageUrl,
+        imageUrl,
         dropId: dropId === '' ? undefined : dropId,
       });
       setName('');
       setDescription('');
       setPrice('');
-      setImageUrl('');
+      setImage(null);
       setDropId('');
       load();
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'failed to create product');
+      setFormError(
+        err instanceof ApiError || err instanceof Error ? err.message : 'failed to create product',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -136,11 +154,12 @@ export function ProductsPage() {
             />
           </label>
           <label className="text-sm">
-            Image URL (optional)
+            Image (optional)
             <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+              className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm file:mr-2 file:rounded-sm file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-xs"
             />
           </label>
           <label className="text-sm">
