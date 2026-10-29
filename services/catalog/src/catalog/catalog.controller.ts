@@ -4,6 +4,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -12,7 +13,13 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { S3Service } from '../s3/s3.service';
-import { CatalogService, type CreateDropInput, type CreateProductInput } from './catalog.service';
+import {
+  CatalogService,
+  type CreateDropInput,
+  type CreateProductInput,
+  type UpdateDropInput,
+  type UpdateProductInput,
+} from './catalog.service';
 
 interface UploadUrlRequest {
   filename: string;
@@ -47,6 +54,13 @@ export class CatalogController {
     return this.catalogService.createProduct(body);
   }
 
+  @Patch('products/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  updateProduct(@Param('id') id: string, @Body() body: UpdateProductInput) {
+    return this.catalogService.updateProduct(id, body);
+  }
+
   // Returns a presigned S3 PutObject URL for apps/admin to upload an image file directly to —
   // this never sees the file bytes itself. See docs/decisions/0030.
   @Post('products/upload-url')
@@ -75,5 +89,12 @@ export class CatalogController {
   @Roles('admin')
   createDrop(@Body() body: CreateDropInput) {
     return this.catalogService.createDrop(body);
+  }
+
+  @Patch('drops/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  updateDrop(@Param('id') id: string, @Body() body: UpdateDropInput) {
+    return this.catalogService.updateDrop(id, body);
   }
 }

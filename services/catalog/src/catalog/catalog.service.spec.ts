@@ -5,8 +5,8 @@ describe('CatalogService', () => {
 
   const makeService = (overrides: Record<string, jest.Mock> = {}) => {
     const prisma = {
-      product: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
-      drop: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
+      product: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      drop: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
       ...overrides,
     };
     const service = new CatalogService(prisma as never);
@@ -213,6 +213,134 @@ describe('CatalogService', () => {
 
       const createCalls = prisma.product.create.mock.calls as [{ data: { dropId: string } }][];
       expect(createCalls[0][0].data.dropId).toBe('drop-1');
+    });
+  });
+
+  describe('updateDrop', () => {
+    const existing = drop('2026-06-02T00:00:00Z', '2026-06-03T00:00:00Z');
+
+    it('throws NotFoundException for an unknown drop', async () => {
+      const { service, prisma } = makeService();
+      prisma.drop.findUnique.mockResolvedValue(null);
+
+      await expect(service.updateDrop('missing', { name: 'x' })).rejects.toThrow(
+        'no drop with id missing',
+      );
+    });
+
+    it('rejects clearing the name', async () => {
+      const { service, prisma } = makeService();
+      prisma.drop.findUnique.mockResolvedValue(existing);
+
+      await expect(service.updateDrop('drop-1', { name: '' })).rejects.toThrow('name is required');
+    });
+
+    it('validates the merged opensAt/closesAt, not just whatever was provided', async () => {
+      const { service, prisma } = makeService();
+      prisma.drop.findUnique.mockResolvedValue(existing);
+
+      // Only lowering closesAt — but the existing opensAt (2026-06-02) makes this invalid.
+      await expect(
+        service.updateDrop('drop-1', { closesAt: '2026-06-01T00:00:00Z' }),
+      ).rejects.toThrow('closesAt must be after opensAt');
+    });
+
+    it('updates only the given field, leaving the rest as stored', async () => {
+      const { service, prisma } = makeService();
+      prisma.drop.findUnique.mockResolvedValue(existing);
+      prisma.drop.update.mockResolvedValue({ ...existing, name: 'Winter drop' });
+
+      await service.updateDrop('drop-1', { name: 'Winter drop' });
+
+      expect(prisma.drop.update).toHaveBeenCalledWith({
+        where: { id: 'drop-1' },
+        data: {
+          name: 'Winter drop',
+          opensAt: existing.opensAt,
+          closesAt: existing.closesAt,
+        },
+      });
+    });
+  });
+
+  describe('updateProduct', () => {
+    const existing = {
+      id: 'product-1',
+      name: 'Tee',
+      description: 'A shirt',
+      priceCents: 2500,
+      imageUrl: 'https://example.com/tee.png',
+      dropId: 'drop-1',
+    };
+
+    it('throws NotFoundException for an unknown product', async () => {
+      const { service, prisma } = makeService();
+      prisma.product.findUnique.mockResolvedValue(null);
+
+      await expect(service.updateProduct('missing', { name: 'x' })).rejects.toThrow(
+        'no product with id missing',
+      );
+    });
+
+    it('rejects a non-positive priceCents', async () => {
+      const { service, prisma } = makeService();
+      prisma.product.findUnique.mockResolvedValue(existing);
+
+      await expect(service.updateProduct('product-1', { priceCents: 0 })).rejects.toThrow(
+        'priceCents must be a positive whole number',
+      );
+    });
+
+    it('rejects an unknown dropId', async () => {
+      const { service, prisma } = makeService();
+      prisma.product.findUnique.mockResolvedValue(existing);
+      prisma.drop.findUnique.mockResolvedValue(null);
+
+      await expect(service.updateProduct('product-1', { dropId: 'missing' })).rejects.toThrow(
+        'no drop with id missing',
+      );
+    });
+
+    it('leaves unspecified fields untouched', async () => {
+      const { service, prisma } = makeService();
+      prisma.product.findUnique.mockResolvedValue(existing);
+      prisma.product.update.mockResolvedValue({ ...existing, priceCents: 3000 });
+
+      await service.updateProduct('product-1', { priceCents: 3000 });
+
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'product-1' },
+        data: {
+          name: existing.name,
+          description: existing.description,
+          priceCents: 3000,
+          imageUrl: existing.imageUrl,
+          dropId: existing.dropId,
+        },
+      });
+    });
+
+    it('clears description when explicitly set to null', async () => {
+      const { service, prisma } = makeService();
+      prisma.product.findUnique.mockResolvedValue(existing);
+      prisma.product.update.mockResolvedValue({ ...existing, description: null });
+
+      await service.updateProduct('product-1', { description: null });
+
+      const updateCalls = prisma.product.update.mock.calls as [{ data: { description: null } }][];
+      expect(updateCalls[0][0].data.description).toBeNull();
+    });
+
+    it('unassigns from its drop when dropId is explicitly set to null', async () => {
+      const { service, prisma } = makeService();
+      prisma.product.findUnique.mockResolvedValue(existing);
+      prisma.product.update.mockResolvedValue({ ...existing, dropId: null });
+
+      await service.updateProduct('product-1', { dropId: null });
+
+      const updateCalls = prisma.product.update.mock.calls as [{ data: { dropId: null } }][];
+      expect(updateCalls[0][0].data.dropId).toBeNull();
+      expect(prisma.drop.findUnique).not.toHaveBeenCalled();
     });
   });
 });

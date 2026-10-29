@@ -5,7 +5,7 @@ import { PackageSearch, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 import { useRequireAuth } from '../lib/use-require-auth';
 import { listProducts, listDrops, type Product, type Drop } from '../lib/catalog-api';
-import { useAdminCatalogApi } from '../lib/admin-catalog-api';
+import { useAdminCatalogApi, type UpdateProductInput } from '../lib/admin-catalog-api';
 import { ApiError } from '../lib/api-error';
 import { EmptyState } from './bits';
 import { Button } from './ui/button';
@@ -16,18 +16,41 @@ const money = (cents: number) =>
 export function ProductsPage() {
   const { initialized, authenticated } = useRequireAuth();
   const { keycloak } = useAuth();
-  const { createProduct, getUploadUrl } = useAdminCatalogApi();
+  const { createProduct, updateProduct, getUploadUrl } = useAdminCatalogApi();
 
   const [products, setProducts] = useState<Product[] | null>(null);
   const [drops, setDrops] = useState<Drop[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [image, setImage] = useState<File | null>(null);
   const [dropId, setDropId] = useState('');
+
+  function resetForm() {
+    setEditingId(null);
+    setExistingImageUrl(null);
+    setName('');
+    setDescription('');
+    setPrice('');
+    setImage(null);
+    setDropId('');
+  }
+
+  function startEditing(product: Product) {
+    setEditingId(product.id);
+    setExistingImageUrl(product.imageUrl);
+    setName(product.name);
+    setDescription(product.description ?? '');
+    setPrice((product.priceCents / 100).toFixed(2));
+    setImage(null);
+    setDropId(product.dropId ?? '');
+    setFormError(null);
+  }
 
   const isAdmin = keycloak?.tokenParsed?.realm_access?.roles?.includes('admin') ?? false;
 
@@ -94,23 +117,38 @@ export function ProductsPage() {
     setFormError(null);
     try {
       const priceCents = Math.round(Number(price) * 100);
-      const imageUrl = image ? await uploadImage(image) : undefined;
-      await createProduct({
-        name,
-        description: description.trim() === '' ? undefined : description,
-        priceCents,
-        imageUrl,
-        dropId: dropId === '' ? undefined : dropId,
-      });
-      setName('');
-      setDescription('');
-      setPrice('');
-      setImage(null);
-      setDropId('');
+      // A new file always replaces the image; no file chosen means "leave whatever's there" on
+      // edit (imageUrl simply isn't in the request) or "no image" on create (unchanged from
+      // before).
+      const newImageUrl = image ? await uploadImage(image) : undefined;
+
+      if (editingId) {
+        const payload: UpdateProductInput = {
+          name,
+          priceCents,
+          description: description.trim() === '' ? null : description,
+          dropId: dropId === '' ? null : dropId,
+        };
+        if (newImageUrl !== undefined) {
+          payload.imageUrl = newImageUrl;
+        }
+        await updateProduct(editingId, payload);
+      } else {
+        await createProduct({
+          name,
+          description: description.trim() === '' ? undefined : description,
+          priceCents,
+          imageUrl: newImageUrl,
+          dropId: dropId === '' ? undefined : dropId,
+        });
+      }
+      resetForm();
       load();
     } catch (err) {
       setFormError(
-        err instanceof ApiError || err instanceof Error ? err.message : 'failed to create product',
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : `failed to ${editingId ? 'update' : 'create'} product`,
       );
     } finally {
       setSubmitting(false);
@@ -122,7 +160,7 @@ export function ProductsPage() {
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Products</h1>
 
       <form onSubmit={(e) => void handleSubmit(e)} className="mb-8 rounded-2xl border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold">New product</h2>
+        <h2 className="mb-3 text-sm font-semibold">{editingId ? 'Edit product' : 'New product'}</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             Name
@@ -154,13 +192,18 @@ export function ProductsPage() {
             />
           </label>
           <label className="text-sm">
-            Image (optional)
+            {editingId ? 'Replace image (optional)' : 'Image (optional)'}
             <input
               type="file"
               accept="image/*"
               onChange={(e) => setImage(e.target.files?.[0] ?? null)}
               className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm file:mr-2 file:rounded-sm file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-xs"
             />
+            {editingId && existingImageUrl && !image && (
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                Current: {existingImageUrl}
+              </p>
+            )}
           </label>
           <label className="text-sm">
             Drop (optional)
@@ -179,9 +222,16 @@ export function ProductsPage() {
           </label>
         </div>
         {formError && <p className="mt-3 text-sm text-destructive">{formError}</p>}
-        <Button type="submit" size="sm" className="mt-3" disabled={submitting}>
-          {submitting ? 'Creating…' : 'Create product'}
-        </Button>
+        <div className="mt-3 flex gap-2">
+          <Button type="submit" size="sm" disabled={submitting}>
+            {submitting ? 'Saving…' : editingId ? 'Update product' : 'Create product'}
+          </Button>
+          {editingId && (
+            <Button type="button" size="sm" variant="ghost" onClick={resetForm}>
+              Cancel
+            </Button>
+          )}
+        </div>
       </form>
 
       {error && <EmptyState icon={TriangleAlert} title="Couldn't load products" body={error} />}
@@ -211,7 +261,12 @@ export function ProductsPage() {
                   <p className="text-sm text-muted-foreground">{product.description}</p>
                 )}
               </div>
-              <span className="font-mono text-sm font-semibold">{money(product.priceCents)}</span>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-sm font-semibold">{money(product.priceCents)}</span>
+                <Button size="sm" variant="ghost" onClick={() => startEditing(product)}>
+                  Edit
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

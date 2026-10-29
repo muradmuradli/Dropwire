@@ -217,4 +217,124 @@ describe('Catalog admin-write (e2e)', () => {
         .expect(400);
     });
   });
+
+  describe('PATCH /drops/:id', () => {
+    async function seedDrop() {
+      const res = await request(app.getHttpServer())
+        .post('/drops')
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({
+          name: 'Original drop',
+          opensAt: '2026-06-01T00:00:00Z',
+          closesAt: '2026-06-02T00:00:00Z',
+        })
+        .expect(201);
+      const body = res.body as { id: string };
+      seededDropIds.push(body.id);
+      return body.id;
+    }
+
+    it('rejects a request with no token', async () => {
+      const id = await seedDrop();
+      return request(app.getHttpServer()).patch(`/drops/${id}`).send({ name: 'x' }).expect(401);
+    });
+
+    it('rejects a customer-role token with 403', async () => {
+      const id = await seedDrop();
+      return request(app.getHttpServer())
+        .patch(`/drops/${id}`)
+        .set('Authorization', `Bearer ${customerToken()}`)
+        .send({ name: 'x' })
+        .expect(403);
+    });
+
+    it('returns 404 for an unknown drop', () => {
+      return request(app.getHttpServer())
+        .patch(`/drops/${randomUUID()}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ name: 'x' })
+        .expect(404);
+    });
+
+    it('updates only the given field, leaving the rest as stored', async () => {
+      const id = await seedDrop();
+
+      const res = await request(app.getHttpServer())
+        .patch(`/drops/${id}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ name: 'Renamed drop' })
+        .expect(200);
+
+      const body = res.body as { name: string; opensAt: string; closesAt: string };
+      expect(body.name).toBe('Renamed drop');
+      expect(body.opensAt).toBe('2026-06-01T00:00:00.000Z');
+      expect(body.closesAt).toBe('2026-06-02T00:00:00.000Z');
+    });
+  });
+
+  describe('PATCH /products/:id', () => {
+    async function seedProduct() {
+      const res = await request(app.getHttpServer())
+        .post('/products')
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ name: 'Original product', description: 'Has a description', priceCents: 1000 })
+        .expect(201);
+      const body = res.body as { id: string };
+      seededProductIds.push(body.id);
+      return body.id;
+    }
+
+    it('rejects a request with no token', async () => {
+      const id = await seedProduct();
+      return request(app.getHttpServer())
+        .patch(`/products/${id}`)
+        .send({ priceCents: 2000 })
+        .expect(401);
+    });
+
+    it('rejects a customer-role token with 403', async () => {
+      const id = await seedProduct();
+      return request(app.getHttpServer())
+        .patch(`/products/${id}`)
+        .set('Authorization', `Bearer ${customerToken()}`)
+        .send({ priceCents: 2000 })
+        .expect(403);
+    });
+
+    it('returns 404 for an unknown product', () => {
+      return request(app.getHttpServer())
+        .patch(`/products/${randomUUID()}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ priceCents: 2000 })
+        .expect(404);
+    });
+
+    it('updates only the given field, leaving the rest as stored', async () => {
+      const id = await seedProduct();
+
+      const res = await request(app.getHttpServer())
+        .patch(`/products/${id}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ priceCents: 2000 })
+        .expect(200);
+
+      const body = res.body as { name: string; description: string; priceCents: number };
+      expect(body.priceCents).toBe(2000);
+      expect(body.name).toBe('Original product');
+      expect(body.description).toBe('Has a description');
+    });
+
+    it('clears description when explicitly set to null', async () => {
+      const id = await seedProduct();
+
+      const res = await request(app.getHttpServer())
+        .patch(`/products/${id}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ description: null })
+        .expect(200);
+
+      const body = res.body as { description: string | null };
+      expect(body.description).toBeNull();
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -57,6 +57,26 @@ export class CatalogProxyController {
     );
   }
 
+  @Patch('products/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  updateProduct(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    return this.proxy.forward(
+      this.catalogUrl(),
+      'catalog',
+      'PATCH',
+      `/products/${id}`,
+      request,
+      response,
+      body,
+    );
+  }
+
   @Post('products/upload-url')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
@@ -102,6 +122,26 @@ export class CatalogProxyController {
       'catalog',
       'POST',
       '/drops',
+      request,
+      response,
+      body,
+    );
+  }
+
+  @Patch('drops/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  updateDrop(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    return this.proxy.forward(
+      this.catalogUrl(),
+      'catalog',
+      'PATCH',
+      `/drops/${id}`,
       request,
       response,
       body,
