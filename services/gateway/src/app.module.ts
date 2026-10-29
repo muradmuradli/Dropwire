@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module';
 import { MeController } from './me/me.controller';
 import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware';
 import { MetricsModule } from './metrics/metrics.module';
+import { AdminOrdersProxyController } from './orders-proxy/admin-orders-proxy.controller';
 import { OrdersProxyController } from './orders-proxy/orders-proxy.controller';
 import { ProxyService } from './proxy/proxy.service';
 
@@ -26,7 +27,13 @@ import { ProxyService } from './proxy/proxy.service';
     MetricsModule,
     AuthModule,
   ],
-  controllers: [AppController, MeController, OrdersProxyController, CatalogProxyController],
+  controllers: [
+    AppController,
+    MeController,
+    OrdersProxyController,
+    AdminOrdersProxyController,
+    CatalogProxyController,
+  ],
   providers: [AppService, ProxyService],
 })
 export class AppModule implements NestModule {

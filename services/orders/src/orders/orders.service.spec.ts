@@ -16,6 +16,7 @@ describe('OrdersService', () => {
       updateMany: jest.Mock;
       findUnique: jest.Mock;
       findMany: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
     };
     outboxMessage: { create: jest.Mock };
     $transaction: jest.Mock;
@@ -37,6 +38,7 @@ describe('OrdersService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn(),
         findMany: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
       },
       outboxMessage: { create: jest.fn().mockResolvedValue(undefined) },
       $transaction: jest.fn((arg: unknown) =>
@@ -289,6 +291,130 @@ describe('OrdersService', () => {
         orderBy: { createdAt: 'desc' },
         take: 50,
       });
+    });
+  });
+
+  describe('listByStatus', () => {
+    it('queries by status, oldest first, capped at 50', async () => {
+      const orders = [{ id: 'order-1' }, { id: 'order-2' }];
+      prisma.order.findMany.mockResolvedValue(orders);
+
+      await expect(service.listByStatus('RESERVATION_FAILED')).resolves.toEqual(orders);
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith({
+        where: { status: 'RESERVATION_FAILED' },
+        include: { items: true },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      });
+    });
+  });
+
+  describe('retryReservation', () => {
+    const stuckOrder = {
+      id: 'order-1',
+      status: 'RESERVATION_FAILED',
+      correlationId: 'c1',
+      items: [{ productId: 'p1', quantity: 2 }],
+    };
+
+    it('throws NotFoundException for an unknown order', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+
+      await expect(service.retryReservation('missing')).rejects.toThrow('no order with id missing');
+    });
+
+    it('rejects an order that is not RESERVATION_FAILED', async () => {
+      prisma.order.findUnique.mockResolvedValue({ ...stuckOrder, status: 'CONFIRMED' });
+
+      await expect(service.retryReservation('order-1')).rejects.toThrow('not RESERVATION_FAILED');
+      expect(inventoryService.reserveStock).not.toHaveBeenCalled();
+    });
+
+    it('transitions to RESERVED when inventory now reserves it', async () => {
+      prisma.order.findUnique.mockResolvedValue(stuckOrder);
+      inventoryService.reserveStock.mockReturnValue(
+        of({ status: ReservationStatus.RESERVATION_STATUS_RESERVED, items: [] }),
+      );
+
+      const result = await service.retryReservation('order-1');
+
+      expect(result.status).toBe('RESERVED');
+      expect(inventoryService.reserveStock).toHaveBeenCalledWith({
+        orderId: 'order-1',
+        correlationId: 'c1',
+        items: [{ productId: 'p1', quantity: 2 }],
+      });
+    });
+
+    it('transitions to CANCELLED when inventory declines it', async () => {
+      prisma.order.findUnique.mockResolvedValue(stuckOrder);
+      inventoryService.reserveStock.mockReturnValue(
+        of({ status: ReservationStatus.RESERVATION_STATUS_OUT_OF_STOCK, items: [] }),
+      );
+
+      const result = await service.retryReservation('order-1');
+
+      expect(result.status).toBe('CANCELLED');
+    });
+
+    it('stays RESERVATION_FAILED, without throwing, if inventory is still unreachable', async () => {
+      prisma.order.findUnique.mockResolvedValue(stuckOrder);
+      inventoryService.reserveStock.mockReturnValue(throwError(() => new Error('unreachable')));
+
+      const result = await service.retryReservation('order-1');
+
+      expect(result.status).toBe('RESERVATION_FAILED');
+      expect(prisma.order.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelStuckOrder', () => {
+    const stuckOrder = {
+      id: 'order-1',
+      status: 'RESERVATION_FAILED',
+      correlationId: 'c1',
+      customerId: 'customer-1',
+      items: [{ productId: 'p1', quantity: 2 }],
+    };
+
+    it('throws NotFoundException for an unknown order', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+
+      await expect(service.cancelStuckOrder('missing')).rejects.toThrow('no order with id missing');
+    });
+
+    it('rejects an order that is not RESERVATION_FAILED', async () => {
+      prisma.order.findUnique.mockResolvedValue({ ...stuckOrder, status: 'RESERVED' });
+
+      await expect(service.cancelStuckOrder('order-1')).rejects.toThrow('not RESERVATION_FAILED');
+      expect(prisma.order.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('cancels and writes an OrderCancelled outbox event, never calling inventory', async () => {
+      prisma.order.findUnique.mockResolvedValue(stuckOrder);
+      prisma.order.findUniqueOrThrow.mockResolvedValue({ ...stuckOrder, status: 'CANCELLED' });
+
+      const result = await service.cancelStuckOrder('order-1');
+
+      expect(result.status).toBe('CANCELLED');
+      expect(prisma.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'order-1', status: 'RESERVATION_FAILED' },
+        data: { status: 'CANCELLED' },
+      });
+      const outboxCalls = prisma.outboxMessage.create.mock.calls as [{ data: { type: string } }][];
+      expect(outboxCalls[0][0].data.type).toBe('OrderCancelled');
+      expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+    });
+
+    it('is a safe no-op on a redelivered/duplicate cancel (idempotent updateMany matched zero rows)', async () => {
+      prisma.order.findUnique.mockResolvedValue(stuckOrder);
+      prisma.order.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      const result = await service.cancelStuckOrder('order-1');
+
+      expect(result).toEqual(stuckOrder);
+      expect(prisma.outboxMessage.create).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -15,7 +17,7 @@ import {
   ReservationStatus,
   ReserveStockResponse,
 } from '../generated/proto/dropwire/inventory/v1/inventory';
-import { Prisma } from '../../generated/prisma';
+import { OrderStatus, Prisma } from '../../generated/prisma';
 import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { INVENTORY_CLIENT } from './inventory-client.constant';
@@ -245,6 +247,104 @@ export class OrdersService implements OnModuleInit {
         }),
       });
       this.sagaOutcomesCounter.inc({ status: 'CANCELLED' });
+    });
+  }
+
+  // Admin-only worklist query (see AdminOrdersController) — cross-customer, filtered by
+  // status, a structurally different access pattern from getOrdersForCustomer's
+  // ownership-scoped one. Oldest-first: a worklist is a queue, and the longest-stuck order
+  // is the most overdue for attention.
+  async listByStatus(status: OrderStatus) {
+    return this.prisma.order.findMany({
+      where: { status },
+      include: { items: true },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+  }
+
+  // Admin action: re-attempts the exact same ReserveStock call placeOrder already made,
+  // safe because it's idempotent on orderId (docs/decisions/0007/0011). Only acts on an
+  // order genuinely still RESERVATION_FAILED — not a business error if inventory is still
+  // unreachable, so that outcome is returned (the order stays RESERVATION_FAILED), not
+  // thrown, unlike placeOrder's own 503. The admin UI reads the returned status to see
+  // whether it resolved.
+  async retryReservation(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`no order with id ${orderId}`);
+    }
+    if (order.status !== 'RESERVATION_FAILED') {
+      throw new ConflictException(`order ${orderId} is ${order.status}, not RESERVATION_FAILED`);
+    }
+
+    let reservation: ReserveStockResponse;
+    try {
+      reservation = await this.retryInventoryCall(() =>
+        lastValueFrom(
+          this.inventoryService.reserveStock({
+            orderId,
+            correlationId: order.correlationId,
+            items: order.items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+          }),
+        ),
+      );
+    } catch {
+      return order;
+    }
+
+    const status =
+      reservation.status === ReservationStatus.RESERVATION_STATUS_RESERVED
+        ? 'RESERVED'
+        : 'CANCELLED';
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { status },
+      include: { items: true },
+    });
+    this.placedCounter.inc({ status });
+    return updated;
+  }
+
+  // Admin action: gives up on an order stuck at RESERVATION_FAILED. No ReleaseStock call —
+  // unlike the PaymentFailed compensation path, nothing was ever actually reserved for a
+  // RESERVATION_FAILED order, so there's nothing to release. Same conditional-updateMany
+  // idempotency shape as handlePaymentFailed, guarding against a double-click/retry.
+  async cancelStuckOrder(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`no order with id ${orderId}`);
+    }
+    if (order.status !== 'RESERVATION_FAILED') {
+      throw new ConflictException(`order ${orderId} is ${order.status}, not RESERVATION_FAILED`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.order.updateMany({
+        where: { id: orderId, status: 'RESERVATION_FAILED' },
+        data: { status: 'CANCELLED' },
+      });
+      if (result.count === 0) {
+        return order;
+      }
+      await tx.outboxMessage.create({
+        data: this.buildOutboxMessageData('OrderCancelled', order.correlationId, {
+          orderId,
+          customerId: order.customerId,
+          reason: 'cancelled by admin after a failed reservation attempt',
+        }),
+      });
+      this.sagaOutcomesCounter.inc({ status: 'CANCELLED' });
+      return tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
     });
   }
 

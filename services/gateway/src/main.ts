@@ -10,7 +10,12 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   const config = app.get(ConfigService);
-  app.enableCors({ origin: config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3100' });
+  app.enableCors({
+    origin: [
+      config.get<string>('WEB_ORIGIN') ?? 'http://localhost:3100',
+      config.get<string>('ADMIN_ORIGIN') ?? 'http://localhost:3101',
+    ],
+  });
 
   const port = config.get<number>('PORT') ?? 3000;
   await app.listen(port);
