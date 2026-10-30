@@ -25,9 +25,9 @@ through `AllExceptionsFilter`, and returns a `503` naming the upstream if it's u
   `GET /drops`, `GET /drops/:id`) have **no** auth guard — `catalog`'s own routes don't have one
   either (`docs/decisions/0017` — product/drop browsing is public), so gateway doesn't invent a
   requirement the upstream doesn't have. Forwards the query string through for `?dropId=`. Its
-  write routes (`POST`/`PATCH /drops[/:id]`, `POST`/`PATCH`/`DELETE /products[/:id]`,
+  write routes (`POST`/`PATCH`/`DELETE /drops[/:id]`, `POST`/`PATCH`/`DELETE /products[/:id]`,
   `POST /products/upload-url`) mirror catalog's own admin-only guard instead (`docs/decisions/0029`
-  through `0032`). `CATALOG_URL` (`.env.example`) points at it — `http://localhost:3001` locally.
+  through `0033`). `CATALOG_URL` (`.env.example`) points at it — `http://localhost:3001` locally.
   Full reasoning in [`docs/decisions/0018`](../../docs/decisions/0018-gateway-catalog-proxy.md).
 
 **Automated e2e coverage exists** (`test/me.e2e-spec.ts`): no live Keycloak needed — it spins up a

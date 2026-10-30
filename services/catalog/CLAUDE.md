@@ -19,14 +19,17 @@ storefront would work): `GET /products` (optional `?dropId=` filter), `GET /prod
 `GET /drops` (each annotated with its derived `status` and its `products`), `GET /drops/:id`.
 
 Write routes (admin-only — `JwtAuthGuard` + `RolesGuard` + `@Roles('admin')`): `POST /drops`,
-`PATCH /drops/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id`, plus
-`POST /products/upload-url` (presigned S3 upload for product images). `PATCH` has true
-partial-update semantics — a field absent from the body is left untouched, an explicit `null` on
-a nullable field clears it. Full reasoning in
+`PATCH /drops/:id`, `DELETE /drops/:id`, `POST /products`, `PATCH /products/:id`,
+`DELETE /products/:id`, plus `POST /products/upload-url` (presigned S3 upload for product
+images). `PATCH` has true partial-update semantics — a field absent from the body is left
+untouched, an explicit `null` on a nullable field clears it. Deleting a drop unassigns (not
+deletes) any products on it, via the schema's own `onDelete: SetNull` — no application code needed
+for that part. Full reasoning in
 [`docs/decisions/0029`](../../docs/decisions/0029-catalog-admin-write.md),
 [`0030`](../../docs/decisions/0030-product-image-uploads-s3.md),
-[`0031`](../../docs/decisions/0031-catalog-edit-support.md), and
-[`0032`](../../docs/decisions/0032-catalog-product-delete.md).
+[`0031`](../../docs/decisions/0031-catalog-edit-support.md),
+[`0032`](../../docs/decisions/0032-catalog-product-delete.md), and
+[`0033`](../../docs/decisions/0033-catalog-drop-delete.md).
 
 **Verified for real** against the live `catalog-db`: seeded a live drop, an upcoming drop, a
 scheduled product, and an unscheduled one directly via Prisma, then hit every route over real HTTP
@@ -35,10 +38,7 @@ computed correctly against real timestamps, `null` `dropId` on the unscheduled p
 structured `404` (via the existing `AllExceptionsFilter`) for an unknown id. Test data cleaned up
 afterward.
 
-`gateway` proxies every route above (`docs/decisions/0018`, `0029`). There's still no delete for
-`Drop` — not asked for, and deleting a drop a product is currently assigned to would need a real
-decision about what happens to those products (`onDelete: SetNull` already clears their `dropId`,
-so nothing would break, but the admin UI has no affordance for it yet).
+`gateway` proxies every route above (`docs/decisions/0018`, `0029`).
 
 **`GET /metrics`** (Prometheus text format): default process metrics plus
 `http_request_duration_seconds`. No business-specific counters here — the HTTP histogram is the

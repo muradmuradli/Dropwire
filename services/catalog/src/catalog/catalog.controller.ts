@@ -107,4 +107,12 @@ export class CatalogController {
   updateDrop(@Param('id') id: string, @Body() body: UpdateDropInput) {
     return this.catalogService.updateDrop(id, body);
   }
+
+  @Delete('drops/:id')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  deleteDrop(@Param('id') id: string) {
+    return this.catalogService.deleteDrop(id);
+  }
 }

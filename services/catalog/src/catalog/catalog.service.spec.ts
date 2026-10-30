@@ -12,7 +12,13 @@ describe('CatalogService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
-      drop: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      drop: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
       ...overrides,
     };
     const service = new CatalogService(prisma as never);
@@ -266,6 +272,27 @@ describe('CatalogService', () => {
           closesAt: existing.closesAt,
         },
       });
+    });
+  });
+
+  describe('deleteDrop', () => {
+    it('throws NotFoundException for an unknown drop', async () => {
+      const { service, prisma } = makeService();
+      prisma.drop.findUnique.mockResolvedValue(null);
+
+      await expect(service.deleteDrop('missing')).rejects.toThrow('no drop with id missing');
+      expect(prisma.drop.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes an existing drop', async () => {
+      const { service, prisma } = makeService();
+      prisma.drop.findUnique.mockResolvedValue(
+        drop('2026-06-02T00:00:00Z', '2026-06-03T00:00:00Z'),
+      );
+
+      await service.deleteDrop('drop-1');
+
+      expect(prisma.drop.delete).toHaveBeenCalledWith({ where: { id: 'drop-1' } });
     });
   });
 

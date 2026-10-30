@@ -173,6 +173,20 @@ export class CatalogProxyController {
     );
   }
 
+  @Delete('drops/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  deleteDrop(@Param('id') id: string, @Req() request: Request, @Res() response: Response) {
+    return this.proxy.forward(
+      this.catalogUrl(),
+      'catalog',
+      'DELETE',
+      `/drops/${id}`,
+      request,
+      response,
+    );
+  }
+
   private catalogUrl(): string {
     return this.config.get<string>('CATALOG_URL') ?? 'http://localhost:3001';
   }

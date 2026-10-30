@@ -10,6 +10,15 @@ import { ApiError } from '../lib/api-error';
 import { toDateTimeInputValue } from '../lib/format';
 import { EmptyState, Pill } from './bits';
 import { Button } from './ui/button';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 const STATUS_TONE = { LIVE: 'success', UPCOMING: 'info', ENDED: 'muted' } as const;
 
@@ -21,13 +30,16 @@ const BRAND_BUTTON =
 export function DropsPage() {
   const { initialized, authenticated } = useRequireAuth();
   const { keycloak } = useAuth();
-  const { createDrop, updateDrop } = useAdminCatalogApi();
+  const { createDrop, updateDrop, deleteDrop } = useAdminCatalogApi();
 
   const [drops, setDrops] = useState<Drop[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [opensAt, setOpensAt] = useState('');
   const [closesAt, setClosesAt] = useState('');
@@ -111,6 +123,28 @@ export function DropsPage() {
     }
   }
 
+  async function handleConfirmDelete() {
+    if (!pendingDeleteId) {
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteDrop(pendingDeleteId);
+      setPendingDeleteId(null);
+      if (editingId === pendingDeleteId) {
+        resetForm();
+      }
+      load();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'failed to delete drop');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const pendingDeleteDrop = drops?.find((d) => d.id === pendingDeleteId) ?? null;
+
   return (
     <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Drops</h1>
@@ -186,11 +220,52 @@ export function DropsPage() {
                 <Button size="sm" className={BRAND_BUTTON} onClick={() => startEditing(drop)}>
                   Edit
                 </Button>
+                <Button size="sm" variant="destructive" onClick={() => setPendingDeleteId(drop.id)}>
+                  Delete
+                </Button>
               </div>
             </li>
           ))}
         </ul>
       )}
+
+      <AlertDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteId(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete drop?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteDrop
+                ? `"${pendingDeleteDrop.name}" will be permanently deleted. This can't be undone.` +
+                  (pendingDeleteDrop.products.length > 0
+                    ? ` ${pendingDeleteDrop.products.length} ${
+                        pendingDeleteDrop.products.length === 1 ? 'product' : 'products'
+                      } assigned to it will become unassigned, not deleted.`
+                    : '')
+                : 'This drop will be permanently deleted.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void handleConfirmDelete()}
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

@@ -65,6 +65,13 @@ export function useAdminCatalogApi() {
       return response.json() as Promise<Drop>;
     },
 
+    async deleteDrop(id: string): Promise<void> {
+      const response = await apiFetch(`/drops/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      await throwIfNotOk(response);
+    },
+
     async createProduct(input: CreateProductInput): Promise<Product> {
       const response = await apiFetch('/products', {
         method: 'POST',

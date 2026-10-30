@@ -272,6 +272,73 @@ describe('Catalog admin-write (e2e)', () => {
     });
   });
 
+  describe('DELETE /drops/:id', () => {
+    async function seedDrop() {
+      const res = await request(app.getHttpServer())
+        .post('/drops')
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({
+          name: 'Drop to delete',
+          opensAt: '2026-06-01T00:00:00Z',
+          closesAt: '2026-06-02T00:00:00Z',
+        })
+        .expect(201);
+      const body = res.body as { id: string };
+      seededDropIds.push(body.id);
+      return body.id;
+    }
+
+    it('rejects a request with no token', async () => {
+      const id = await seedDrop();
+      return request(app.getHttpServer()).delete(`/drops/${id}`).expect(401);
+    });
+
+    it('rejects a customer-role token with 403', async () => {
+      const id = await seedDrop();
+      return request(app.getHttpServer())
+        .delete(`/drops/${id}`)
+        .set('Authorization', `Bearer ${customerToken()}`)
+        .expect(403);
+    });
+
+    it('returns 404 for an unknown drop', () => {
+      return request(app.getHttpServer())
+        .delete(`/drops/${randomUUID()}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .expect(404);
+    });
+
+    it('deletes a real drop, and it is then gone', async () => {
+      const id = await seedDrop();
+
+      await request(app.getHttpServer())
+        .delete(`/drops/${id}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .expect(204);
+
+      await request(app.getHttpServer()).get(`/drops/${id}`).expect(404);
+    });
+
+    it('unassigns, rather than deletes, a product that was in the drop', async () => {
+      const dropId = await seedDrop();
+      const productRes = await request(app.getHttpServer())
+        .post('/products')
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ name: 'Product in drop to delete', priceCents: 1000, dropId })
+        .expect(201);
+      const productId = (productRes.body as { id: string }).id;
+      seededProductIds.push(productId);
+
+      await request(app.getHttpServer())
+        .delete(`/drops/${dropId}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .expect(204);
+
+      const getRes = await request(app.getHttpServer()).get(`/products/${productId}`).expect(200);
+      expect((getRes.body as { dropId: string | null }).dropId).toBeNull();
+    });
+  });
+
   describe('PATCH /products/:id', () => {
     async function seedProduct() {
       const res = await request(app.getHttpServer())

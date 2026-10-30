@@ -94,6 +94,16 @@ export class CatalogService {
     return this.prisma.drop.update({ where: { id }, data: { name, opensAt, closesAt } });
   }
 
+  // Deleting a drop doesn't delete its products — the schema's onDelete: SetNull just clears
+  // their dropId, so they become unassigned rather than disappearing.
+  async deleteDrop(id: string): Promise<void> {
+    const existing = await this.prisma.drop.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException(`no drop with id ${id}`);
+    }
+    await this.prisma.drop.delete({ where: { id } });
+  }
+
   async createProduct(input: CreateProductInput): Promise<Product> {
     this.assertValidName(input?.name);
     this.assertValidPriceCents(input.priceCents);
