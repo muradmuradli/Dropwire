@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
@@ -18,6 +19,23 @@ const NAV_LINKS = [
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
+  // next-themes only knows the real theme after mount (it reads localStorage client-side) — on
+  // first render its value doesn't yet match what the server rendered, so this icon/label must
+  // stay in a neutral, mount-independent state until then rather than branch on resolvedTheme.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <Button variant="ghost" size="icon" aria-label="Toggle theme" disabled>
+        <Sun className="h-4 w-4 opacity-0" />
+      </Button>
+    );
+  }
+
   const dark = resolvedTheme === 'dark';
   return (
     <Button
