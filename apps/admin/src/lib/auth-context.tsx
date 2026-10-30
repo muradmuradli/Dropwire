@@ -53,7 +53,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     if (!initPromise) {
-      initPromise = kc.init({ pkceMethod: 'S256' });
+      // Without `onLoad`, keycloak-js only authenticates right after a redirect back from the
+      // login page — a plain reload has no login code in the URL, so the session would otherwise
+      // look logged-out every time. `check-sso` re-checks Keycloak's own SSO session cookie via a
+      // hidden iframe on every load instead of a full-page redirect.
+      initPromise = kc.init({
+        pkceMethod: 'S256',
+        onLoad: 'check-sso',
+        silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
+      });
     }
 
     initPromise
