@@ -14,9 +14,19 @@ time on every read, since storing it would need a background job just to flip a 
 already fully determined by two timestamps. Full reasoning in
 [`docs/decisions/0017`](../../docs/decisions/0017-catalog-product-drop-model.md).
 
-Routes (no auth guard — product/drop browsing is public, matching how an unauthenticated storefront
-would work): `GET /products` (optional `?dropId=` filter), `GET /products/:id`, `GET /drops`
-(each annotated with its derived `status` and its `products`), `GET /drops/:id`.
+Read routes (no auth guard — product/drop browsing is public, matching how an unauthenticated
+storefront would work): `GET /products` (optional `?dropId=` filter), `GET /products/:id`,
+`GET /drops` (each annotated with its derived `status` and its `products`), `GET /drops/:id`.
+
+Write routes (admin-only — `JwtAuthGuard` + `RolesGuard` + `@Roles('admin')`): `POST /drops`,
+`PATCH /drops/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id`, plus
+`POST /products/upload-url` (presigned S3 upload for product images). `PATCH` has true
+partial-update semantics — a field absent from the body is left untouched, an explicit `null` on
+a nullable field clears it. Full reasoning in
+[`docs/decisions/0029`](../../docs/decisions/0029-catalog-admin-write.md),
+[`0030`](../../docs/decisions/0030-product-image-uploads-s3.md),
+[`0031`](../../docs/decisions/0031-catalog-edit-support.md), and
+[`0032`](../../docs/decisions/0032-catalog-product-delete.md).
 
 **Verified for real** against the live `catalog-db`: seeded a live drop, an upcoming drop, a
 scheduled product, and an unscheduled one directly via Prisma, then hit every route over real HTTP
@@ -25,9 +35,10 @@ computed correctly against real timestamps, `null` `dropId` on the unscheduled p
 structured `404` (via the existing `AllExceptionsFilter`) for an unknown id. Test data cleaned up
 afterward.
 
-`gateway` now proxies to all four routes (`docs/decisions/0018`). Still not done: no write
-endpoints (`POST`/`PATCH` for products/drops) — nothing yet needs to create catalog data outside of
-a seed/migration, so there's no real requirement driving their design.
+`gateway` proxies every route above (`docs/decisions/0018`, `0029`). There's still no delete for
+`Drop` — not asked for, and deleting a drop a product is currently assigned to would need a real
+decision about what happens to those products (`onDelete: SetNull` already clears their `dropId`,
+so nothing would break, but the admin UI has no affordance for it yet).
 
 **`GET /metrics`** (Prometheus text format): default process metrics plus
 `http_request_duration_seconds`. No business-specific counters here — the HTTP histogram is the

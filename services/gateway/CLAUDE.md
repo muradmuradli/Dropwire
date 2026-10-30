@@ -21,12 +21,14 @@ through `AllExceptionsFilter`, and returns a `503` naming the upstream if it's u
   rejects unauthenticated requests before ever calling out to `orders` (fail fast; confirmed by
   hand that `orders` still rejects bad tokens even when called directly, bypassing `gateway`
   entirely). `ORDERS_URL` (`.env.example`) points at it — `http://localhost:3003` locally.
-- `CatalogProxyController` (`GET /products[?dropId=]`, `GET /products/:id`, `GET /drops`, `GET
-  /drops/:id`) has **no** auth guard — `catalog`'s own routes don't have one either
-  (`docs/decisions/0017` — product/drop browsing is public), so gateway doesn't invent a
-  requirement the upstream doesn't have. Forwards the query string through for `?dropId=`.
-  `CATALOG_URL` (`.env.example`) points at it — `http://localhost:3001` locally. Full reasoning in
-  [`docs/decisions/0018`](../../docs/decisions/0018-gateway-catalog-proxy.md).
+- `CatalogProxyController`'s read routes (`GET /products[?dropId=]`, `GET /products/:id`,
+  `GET /drops`, `GET /drops/:id`) have **no** auth guard — `catalog`'s own routes don't have one
+  either (`docs/decisions/0017` — product/drop browsing is public), so gateway doesn't invent a
+  requirement the upstream doesn't have. Forwards the query string through for `?dropId=`. Its
+  write routes (`POST`/`PATCH /drops[/:id]`, `POST`/`PATCH`/`DELETE /products[/:id]`,
+  `POST /products/upload-url`) mirror catalog's own admin-only guard instead (`docs/decisions/0029`
+  through `0032`). `CATALOG_URL` (`.env.example`) points at it — `http://localhost:3001` locally.
+  Full reasoning in [`docs/decisions/0018`](../../docs/decisions/0018-gateway-catalog-proxy.md).
 
 **Automated e2e coverage exists** (`test/me.e2e-spec.ts`): no live Keycloak needed — it spins up a
 throwaway local HTTP server serving a JWKS response for an RSA key pair generated on the fly, points

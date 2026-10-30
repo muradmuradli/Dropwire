@@ -143,6 +143,14 @@ export class CatalogService {
     });
   }
 
+  async deleteProduct(id: string): Promise<void> {
+    const existing = await this.prisma.product.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException(`no product with id ${id}`);
+    }
+    await this.prisma.product.delete({ where: { id } });
+  }
+
   private assertValidName(name: unknown): void {
     if (typeof name !== 'string' || name.trim().length === 0) {
       throw new BadRequestException('name is required');

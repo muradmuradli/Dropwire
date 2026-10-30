@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Patch,
@@ -59,6 +61,14 @@ export class CatalogController {
   @Roles('admin')
   updateProduct(@Param('id') id: string, @Body() body: UpdateProductInput) {
     return this.catalogService.updateProduct(id, body);
+  }
+
+  @Delete('products/:id')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  deleteProduct(@Param('id') id: string) {
+    return this.catalogService.deleteProduct(id);
   }
 
   // Returns a presigned S3 PutObject URL for apps/admin to upload an image file directly to —

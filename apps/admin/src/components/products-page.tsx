@@ -9,6 +9,15 @@ import { useAdminCatalogApi, type UpdateProductInput } from '../lib/admin-catalo
 import { ApiError } from '../lib/api-error';
 import { EmptyState } from './bits';
 import { Button } from './ui/button';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 const money = (cents: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
@@ -21,7 +30,7 @@ const BRAND_BUTTON =
 export function ProductsPage() {
   const { initialized, authenticated } = useRequireAuth();
   const { keycloak } = useAuth();
-  const { createProduct, updateProduct, getUploadUrl } = useAdminCatalogApi();
+  const { createProduct, updateProduct, deleteProduct, getUploadUrl } = useAdminCatalogApi();
 
   const [products, setProducts] = useState<Product[] | null>(null);
   const [drops, setDrops] = useState<Drop[]>([]);
@@ -29,6 +38,9 @@ export function ProductsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -160,6 +172,28 @@ export function ProductsPage() {
     }
   }
 
+  async function handleConfirmDelete() {
+    if (!pendingDeleteId) {
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteProduct(pendingDeleteId);
+      setPendingDeleteId(null);
+      if (editingId === pendingDeleteId) {
+        resetForm();
+      }
+      load();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'failed to delete product');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const pendingDeleteProduct = products?.find((p) => p.id === pendingDeleteId) ?? null;
+
   return (
     <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Products</h1>
@@ -272,11 +306,51 @@ export function ProductsPage() {
                 <Button size="sm" className={BRAND_BUTTON} onClick={() => startEditing(product)}>
                   Edit
                 </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setPendingDeleteId(product.id)}
+                >
+                  Delete
+                </Button>
               </div>
             </li>
           ))}
         </ul>
       )}
+
+      <AlertDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteId(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteProduct
+                ? `"${pendingDeleteProduct.name}" will be permanently deleted. This can't be undone.`
+                : 'This product will be permanently deleted.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void handleConfirmDelete()}
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

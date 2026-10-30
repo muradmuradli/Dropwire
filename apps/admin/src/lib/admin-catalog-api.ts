@@ -85,6 +85,13 @@ export function useAdminCatalogApi() {
       return response.json() as Promise<Product>;
     },
 
+    async deleteProduct(id: string): Promise<void> {
+      const response = await apiFetch(`/products/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      await throwIfNotOk(response);
+    },
+
     // Returns a presigned S3 PutObject URL — the caller PUTs the file straight to uploadUrl
     // (not through gateway/catalog) and uses publicUrl as the product's imageUrl. See
     // docs/decisions/0030.

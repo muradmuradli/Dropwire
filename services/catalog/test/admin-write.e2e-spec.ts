@@ -337,4 +337,48 @@ describe('Catalog admin-write (e2e)', () => {
       expect(body.description).toBeNull();
     });
   });
+
+  describe('DELETE /products/:id', () => {
+    async function seedProduct() {
+      const res = await request(app.getHttpServer())
+        .post('/products')
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .send({ name: 'Product to delete', priceCents: 1000 })
+        .expect(201);
+      const body = res.body as { id: string };
+      seededProductIds.push(body.id);
+      return body.id;
+    }
+
+    it('rejects a request with no token', async () => {
+      const id = await seedProduct();
+      return request(app.getHttpServer()).delete(`/products/${id}`).expect(401);
+    });
+
+    it('rejects a customer-role token with 403', async () => {
+      const id = await seedProduct();
+      return request(app.getHttpServer())
+        .delete(`/products/${id}`)
+        .set('Authorization', `Bearer ${customerToken()}`)
+        .expect(403);
+    });
+
+    it('returns 404 for an unknown product', () => {
+      return request(app.getHttpServer())
+        .delete(`/products/${randomUUID()}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .expect(404);
+    });
+
+    it('deletes a real product for an admin-role token, and it is then gone', async () => {
+      const id = await seedProduct();
+
+      await request(app.getHttpServer())
+        .delete(`/products/${id}`)
+        .set('Authorization', `Bearer ${adminToken()}`)
+        .expect(204);
+
+      await request(app.getHttpServer()).get(`/products/${id}`).expect(404);
+    });
+  });
 });

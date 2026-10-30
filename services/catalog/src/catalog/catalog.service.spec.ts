@@ -5,7 +5,13 @@ describe('CatalogService', () => {
 
   const makeService = (overrides: Record<string, jest.Mock> = {}) => {
     const prisma = {
-      product: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      product: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
       drop: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
       ...overrides,
     };
@@ -341,6 +347,25 @@ describe('CatalogService', () => {
       const updateCalls = prisma.product.update.mock.calls as [{ data: { dropId: null } }][];
       expect(updateCalls[0][0].data.dropId).toBeNull();
       expect(prisma.drop.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteProduct', () => {
+    it('throws NotFoundException for an unknown product', async () => {
+      const { service, prisma } = makeService();
+      prisma.product.findUnique.mockResolvedValue(null);
+
+      await expect(service.deleteProduct('missing')).rejects.toThrow('no product with id missing');
+      expect(prisma.product.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes an existing product', async () => {
+      const { service, prisma } = makeService();
+      prisma.product.findUnique.mockResolvedValue({ id: 'product-1' });
+
+      await service.deleteProduct('product-1');
+
+      expect(prisma.product.delete).toHaveBeenCalledWith({ where: { id: 'product-1' } });
     });
   });
 });

@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -74,6 +85,20 @@ export class CatalogProxyController {
       request,
       response,
       body,
+    );
+  }
+
+  @Delete('products/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  deleteProduct(@Param('id') id: string, @Req() request: Request, @Res() response: Response) {
+    return this.proxy.forward(
+      this.catalogUrl(),
+      'catalog',
+      'DELETE',
+      `/products/${id}`,
+      request,
+      response,
     );
   }
 
