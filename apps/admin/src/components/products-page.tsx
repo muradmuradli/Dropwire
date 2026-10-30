@@ -13,6 +13,11 @@ import { Button } from './ui/button';
 const money = (cents: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 
+// Same brand yellow as the sidebar logo mark (see components/logo.tsx) — used on the primary
+// create/edit actions so they stand out against the neutral admin palette.
+const BRAND_BUTTON =
+  'bg-[oklch(0.86_0.22_128)] text-[oklch(0.18_0.03_128)] hover:bg-[oklch(0.86_0.22_128)]/90';
+
 export function ProductsPage() {
   const { initialized, authenticated } = useRequireAuth();
   const { keycloak } = useAuth();
@@ -185,9 +190,10 @@ export function ProductsPage() {
           </label>
           <label className="text-sm sm:col-span-2">
             Description (optional)
-            <input
+            <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              rows={3}
               className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm"
             />
           </label>
@@ -223,7 +229,7 @@ export function ProductsPage() {
         </div>
         {formError && <p className="mt-3 text-sm text-destructive">{formError}</p>}
         <div className="mt-3 flex gap-2">
-          <Button type="submit" size="sm" disabled={submitting}>
+          <Button type="submit" size="sm" disabled={submitting} className={BRAND_BUTTON}>
             {submitting ? 'Saving…' : editingId ? 'Update product' : 'Create product'}
           </Button>
           {editingId && (
@@ -263,7 +269,7 @@ export function ProductsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono text-sm font-semibold">{money(product.priceCents)}</span>
-                <Button size="sm" variant="ghost" onClick={() => startEditing(product)}>
+                <Button size="sm" className={BRAND_BUTTON} onClick={() => startEditing(product)}>
                   Edit
                 </Button>
               </div>

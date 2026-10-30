@@ -13,6 +13,11 @@ import { Button } from './ui/button';
 
 const STATUS_TONE = { LIVE: 'success', UPCOMING: 'info', ENDED: 'muted' } as const;
 
+// Same brand yellow as the sidebar logo mark (see components/logo.tsx) — used on the primary
+// create/edit actions so they stand out against the neutral admin palette.
+const BRAND_BUTTON =
+  'bg-[oklch(0.86_0.22_128)] text-[oklch(0.18_0.03_128)] hover:bg-[oklch(0.86_0.22_128)]/90';
+
 export function DropsPage() {
   const { initialized, authenticated } = useRequireAuth();
   const { keycloak } = useAuth();
@@ -145,7 +150,7 @@ export function DropsPage() {
         </div>
         {formError && <p className="mt-3 text-sm text-destructive">{formError}</p>}
         <div className="mt-3 flex gap-2">
-          <Button type="submit" size="sm" disabled={submitting}>
+          <Button type="submit" size="sm" disabled={submitting} className={BRAND_BUTTON}>
             {submitting ? 'Saving…' : editingId ? 'Update drop' : 'Create drop'}
           </Button>
           {editingId && (
@@ -178,7 +183,7 @@ export function DropsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Pill tone={STATUS_TONE[drop.status]}>{drop.status}</Pill>
-                <Button size="sm" variant="ghost" onClick={() => startEditing(drop)}>
+                <Button size="sm" className={BRAND_BUTTON} onClick={() => startEditing(drop)}>
                   Edit
                 </Button>
               </div>
