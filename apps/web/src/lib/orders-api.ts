@@ -19,6 +19,9 @@ export interface Order {
   customerId: string;
   correlationId: string;
   status: OrderStatus;
+  // Set once payments has a real Stripe Checkout Session for this order — null until then
+  // (or if the order never got that far). See docs/decisions/0034.
+  checkoutUrl: string | null;
   createdAt: string;
   updatedAt: string;
   items: OrderItem[];

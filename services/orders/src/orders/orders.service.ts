@@ -250,6 +250,22 @@ export class OrdersService implements OnModuleInit {
     });
   }
 
+  // Triggered by a consumed PaymentCheckoutCreated event — stores the Stripe Checkout URL so
+  // the frontend (polling GET /orders/:orderId, same as it already does for status) can
+  // redirect the browser there. Not a saga state transition (no outbox event produced here):
+  // this is metadata for the frontend, not a status orders itself needs to act on. Guarded on
+  // status still being RESERVED so a late/redelivered event can't resurrect a checkout URL on
+  // an order that's already moved past it. See docs/decisions/0034.
+  async handleCheckoutCreated(orderId: string, checkoutUrl: string): Promise<void> {
+    const result = await this.prisma.order.updateMany({
+      where: { id: orderId, status: 'RESERVED' },
+      data: { checkoutUrl },
+    });
+    if (result.count === 0) {
+      this.logger.log(`order ${orderId} is not RESERVED; ignoring checkout-created event for it`);
+    }
+  }
+
   // Admin-only worklist query (see AdminOrdersController) — cross-customer, filtered by
   // status, a structurally different access pattern from getOrdersForCustomer's
   // ownership-scoped one. Oldest-first: a worklist is a queue, and the longest-stuck order

@@ -1,11 +1,15 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PaymentConfirmed } from '../generated/events/payment-confirmed';
 import { PaymentFailed } from '../generated/events/payment-failed';
+import { PaymentCheckoutCreated } from '../generated/events/payment-checkout-created';
 import { KafkaConsumerService } from '../kafka/kafka-consumer.service';
 import { OrdersService } from './orders.service';
 
 const PAYMENT_CONFIRMED_TOPIC = 'payment.confirmed';
 const PAYMENT_FAILED_TOPIC = 'payment.failed';
+const PAYMENT_CHECKOUT_CREATED_TOPIC = 'payment.checkout_created';
+
+type ConsumedEvent = PaymentConfirmed | PaymentFailed | PaymentCheckoutCreated;
 
 @Injectable()
 export class OrderEventsConsumer implements OnModuleInit {
@@ -18,7 +22,7 @@ export class OrderEventsConsumer implements OnModuleInit {
 
   async onModuleInit() {
     await this.kafkaConsumer.subscribe(
-      [PAYMENT_CONFIRMED_TOPIC, PAYMENT_FAILED_TOPIC],
+      [PAYMENT_CONFIRMED_TOPIC, PAYMENT_FAILED_TOPIC, PAYMENT_CHECKOUT_CREATED_TOPIC],
       (topic, _key, value) => this.handleMessage(topic, value),
     );
   }
@@ -29,9 +33,9 @@ export class OrderEventsConsumer implements OnModuleInit {
     // failure, e.g. the database or inventory being briefly unreachable) is intentionally
     // left to throw so KafkaConsumerService doesn't acknowledge it, and kafkajs retries
     // instead — safe because OrdersService's handlers are idempotent.
-    let event: PaymentConfirmed | PaymentFailed;
+    let event: ConsumedEvent;
     try {
-      event = JSON.parse(value) as PaymentConfirmed | PaymentFailed;
+      event = JSON.parse(value) as ConsumedEvent;
     } catch (error) {
       this.logger.error(
         `could not parse a message from ${topic} as JSON, dropping it: ${error instanceof Error ? error.message : String(error)}`,
@@ -53,6 +57,16 @@ export class OrderEventsConsumer implements OnModuleInit {
     if (topic === PAYMENT_FAILED_TOPIC) {
       const reason = (event as PaymentFailed).payload?.reason ?? 'unknown';
       await this.ordersService.handlePaymentFailed(event.correlationId, orderId, reason);
+      return;
+    }
+
+    if (topic === PAYMENT_CHECKOUT_CREATED_TOPIC) {
+      const checkoutUrl = (event as PaymentCheckoutCreated).payload?.checkoutUrl;
+      if (typeof checkoutUrl !== 'string') {
+        this.logger.error(`malformed ${topic} event (id=${event.id}), dropping it`);
+        return;
+      }
+      await this.ordersService.handleCheckoutCreated(orderId, checkoutUrl);
       return;
     }
 

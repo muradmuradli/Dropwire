@@ -1,27 +1,23 @@
-import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import Stripe from 'stripe';
 import { Counter } from 'prom-client';
 import { Prisma } from '../../generated/prisma';
 import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CheckoutLineItem, StripeService } from '../stripe/stripe.service';
 
-const DEFAULT_FAILURE_RATE = 0.3;
-const SIMULATED_DECLINE_REASON = 'simulated decline (PAYMENT_FAILURE_RATE)';
+const STRIPE_SESSION_EXPIRED_REASON = 'Stripe Checkout Session expired or was abandoned';
 
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
-  private readonly failureRate: number;
   private readonly processedCounter: Counter<'status'>;
 
   constructor(
     private readonly prisma: PrismaService,
-    config: ConfigService,
+    private readonly stripe: StripeService,
     metrics: MetricsService,
   ) {
-    const configured = Number(config.get<string>('PAYMENT_FAILURE_RATE'));
-    this.failureRate = Number.isFinite(configured) ? configured : DEFAULT_FAILURE_RATE;
     this.processedCounter = new Counter({
       name: 'payments_processed_total',
       help: 'Payment attempts by terminal outcome',
@@ -33,48 +29,133 @@ export class PaymentService {
   // Triggered by a consumed InventoryReserved event (see PaymentEventsConsumer). orderId is
   // the idempotency key — one order has at most one payment attempt, same shape as
   // inventory's Reservation (docs/decisions/0011) — so a redelivered Kafka message for an
-  // order that's already resolved is a safe no-op, and one for an order still PENDING
-  // (a crash mid-attempt) safely retries instead of charging twice.
+  // order that's already resolved is a safe no-op. Unlike the old dummy-dice-roll version,
+  // this doesn't reach a terminal state itself — it only gets as far as creating a Stripe
+  // Checkout Session; CONFIRMED/FAILED only happen later, from Stripe's webhook (see
+  // handleStripeEvent). See docs/decisions/0034.
   async handleInventoryReserved(
     eventId: string,
     correlationId: string,
     orderId: string,
+    items: CheckoutLineItem[],
   ): Promise<void> {
     const existing = await this.getOrCreatePendingPayment(orderId, correlationId, eventId);
-    if (existing && existing.status !== 'PENDING') {
-      this.logger.log(
-        `order ${orderId} already has a terminal payment (${existing.status}); ignoring redelivered event ${eventId}`,
-      );
+    if (existing) {
+      if (existing.status !== 'PENDING') {
+        this.logger.log(
+          `order ${orderId} already has a terminal payment (${existing.status}); ignoring redelivered event ${eventId}`,
+        );
+        return;
+      }
+      if (existing.checkoutSessionId) {
+        this.logger.log(
+          `order ${orderId} already has a Checkout Session; ignoring redelivered event ${eventId}`,
+        );
+        return;
+      }
+    }
+
+    const session = await this.stripe.createCheckoutSession(orderId, items);
+    await this.prisma.$transaction([
+      this.prisma.payment.update({
+        where: { orderId },
+        data: { checkoutSessionId: session.sessionId, checkoutUrl: session.url },
+      }),
+      this.prisma.outboxMessage.create({
+        data: this.buildOutboxMessageData('PaymentCheckoutCreated', correlationId, {
+          orderId,
+          checkoutUrl: session.url,
+        }),
+      }),
+    ]);
+  }
+
+  // Triggered by a verified Stripe webhook event (see StripeWebhookController — signature
+  // verification happens before this is ever called, so a forged/replayed event never reaches
+  // here). Only the event types this saga actually needs a terminal outcome from are handled;
+  // anything else (e.g. payment_intent.created) is a deliberate no-op, not a dropped error.
+  async handleStripeEvent(event: Stripe.Event): Promise<void> {
+    if (
+      event.type === 'checkout.session.completed' ||
+      event.type === 'checkout.session.async_payment_succeeded'
+    ) {
+      const session: Stripe.Checkout.Session = event.data.object;
+      await this.confirmPayment(session.client_reference_id, session.id);
       return;
     }
 
-    if (Math.random() >= this.failureRate) {
-      const providerReference = randomUUID();
-      await this.prisma.$transaction([
-        this.prisma.payment.update({
-          where: { orderId },
-          data: { status: 'CONFIRMED', providerReference },
-        }),
-        this.prisma.outboxMessage.create({
-          data: this.buildOutboxMessageData('PaymentConfirmed', correlationId, {
-            orderId,
-            paymentId: providerReference,
-          }),
-        }),
-      ]);
-      this.processedCounter.inc({ status: 'CONFIRMED' });
+    if (
+      event.type === 'checkout.session.expired' ||
+      event.type === 'checkout.session.async_payment_failed'
+    ) {
+      const session: Stripe.Checkout.Session = event.data.object;
+      await this.failPayment(session.client_reference_id, STRIPE_SESSION_EXPIRED_REASON);
+      return;
+    }
+
+    this.logger.log(`ignoring unhandled Stripe event type ${event.type}`);
+  }
+
+  private async confirmPayment(orderId: string | null, providerReference: string): Promise<void> {
+    if (!orderId) {
+      this.logger.error('Stripe checkout.session event with no client_reference_id, dropping it');
+      return;
+    }
+
+    const payment = await this.prisma.payment.findUnique({ where: { orderId } });
+    if (!payment) {
+      this.logger.error(`Stripe webhook for unknown order ${orderId}, dropping it`);
+      return;
+    }
+    if (payment.status !== 'PENDING') {
+      this.logger.log(
+        `order ${orderId} already has a terminal payment (${payment.status}); ignoring redelivered Stripe webhook`,
+      );
       return;
     }
 
     await this.prisma.$transaction([
       this.prisma.payment.update({
         where: { orderId },
-        data: { status: 'FAILED', failureReason: SIMULATED_DECLINE_REASON },
+        data: { status: 'CONFIRMED', providerReference },
       }),
       this.prisma.outboxMessage.create({
-        data: this.buildOutboxMessageData('PaymentFailed', correlationId, {
+        data: this.buildOutboxMessageData('PaymentConfirmed', payment.correlationId, {
           orderId,
-          reason: SIMULATED_DECLINE_REASON,
+          paymentId: providerReference,
+        }),
+      }),
+    ]);
+    this.processedCounter.inc({ status: 'CONFIRMED' });
+  }
+
+  private async failPayment(orderId: string | null, reason: string): Promise<void> {
+    if (!orderId) {
+      this.logger.error('Stripe checkout.session event with no client_reference_id, dropping it');
+      return;
+    }
+
+    const payment = await this.prisma.payment.findUnique({ where: { orderId } });
+    if (!payment) {
+      this.logger.error(`Stripe webhook for unknown order ${orderId}, dropping it`);
+      return;
+    }
+    if (payment.status !== 'PENDING') {
+      this.logger.log(
+        `order ${orderId} already has a terminal payment (${payment.status}); ignoring redelivered Stripe webhook`,
+      );
+      return;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.payment.update({
+        where: { orderId },
+        data: { status: 'FAILED', failureReason: reason },
+      }),
+      this.prisma.outboxMessage.create({
+        data: this.buildOutboxMessageData('PaymentFailed', payment.correlationId, {
+          orderId,
+          reason,
         }),
       }),
     ]);

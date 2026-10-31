@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://dropwire.dev/schemas/payment-checkout-created.schema.json",
+  "title": "PaymentCheckoutCreated",
+  "description": "Topic: payment.checkout_created. Producer: payments. Consumer(s): orders. Published once a Stripe Checkout Session exists for an order's payment attempt, so the order (and from there, the customer's browser) can be redirected to it — see docs/decisions/0034.",
+  "allOf": [
+    { "$ref": "envelope.schema.json" },
+    {
+      "properties": {
+        "type": { "const": "PaymentCheckoutCreated" },
+        "payload": {
+          "type": "object",
+          "required": ["orderId", "checkoutUrl"],
+          "properties": {
+            "orderId": { "type": "string", "format": "uuid" },
+            "checkoutUrl": { "type": "string", "format": "uri" }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

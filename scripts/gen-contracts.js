@@ -29,11 +29,12 @@ const EVENT_CONSUMERS = {
     'inventory-released',
     'payment-confirmed',
     'payment-failed',
+    'payment-checkout-created',
     'order-confirmed',
     'order-cancelled',
   ],
   inventory: ['order-placed', 'inventory-reserved', 'inventory-released'],
-  payments: ['inventory-reserved', 'payment-confirmed', 'payment-failed'],
+  payments: ['inventory-reserved', 'payment-confirmed', 'payment-failed', 'payment-checkout-created'],
   notifications: ['order-confirmed', 'order-cancelled'],
 };
 

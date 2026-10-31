@@ -11,7 +11,7 @@ goal: never oversell stock under heavy concurrent load, and recover cleanly when
 | `services/catalog` | Products and drops | `catalog-db` |
 | `services/inventory` | Stock reservation (Redis atomic ops + Postgres record) | `inventory-db`, Redis |
 | `services/orders` | Order lifecycle, saga orchestration | `orders-db` |
-| `services/payments` | Mocked payment provider, configurable failure rate | `payments-db` |
+| `services/payments` | Payment provider integration (Stripe Checkout, test mode) | `payments-db` |
 | `services/notifications` | Consumes events, logs/sends mock emails | nothing (no DB) |
 | `apps/web` | Next.js frontend (placeholder UI for now) | — |
 
@@ -20,9 +20,9 @@ more detail.
 
 ## Architecture rules
 
-- **No code sharing between services.** Services depend only on `contracts/` (proto + JSON Schema —
-  currently empty placeholders, see `notes/PROGRESS.md`), never on each other's source. Once contracts
-  exist, types get generated into each consuming service's own `src/generated/` (gitignored) — not
+- **No code sharing between services.** Services depend only on `contracts/` (proto + JSON Schema),
+  never on each other's source. Types get generated (`pnpm gen:contracts`, `scripts/gen-contracts.js`)
+  into each consuming service's own `src/generated/` (gitignored) — not
   a shared runtime package.
 - **No shared database.** Each service owns its own Postgres instance. No service holds credentials
   to another service's database.

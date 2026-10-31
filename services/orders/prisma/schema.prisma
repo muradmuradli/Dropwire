@@ -30,6 +30,10 @@ model Order {
   customerId    String
   correlationId String
   status        OrderStatus
+  // Set once payments has a real Stripe Checkout Session for this order (via the consumed
+  // PaymentCheckoutCreated event) — the frontend redirects the browser here. Null until then,
+  // and irrelevant again once the order leaves RESERVED either way.
+  checkoutUrl   String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         OrderItem[]

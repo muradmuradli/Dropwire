@@ -27,6 +27,13 @@ insert-first pattern — the `Order` row already exists by the time these events
 inventory's `Reservation`/payments' `Payment`. Full reasoning in
 [`docs/decisions/0015`](../../docs/decisions/0015-orders-consumes-payment-events.md).
 
+The same consumer also handles `PaymentCheckoutCreated` → `OrdersService.handleCheckoutCreated`,
+which just stores the Stripe Checkout URL on `Order.checkoutUrl` (same `WHERE ... status =
+'RESERVED'` guard, but writes no outbox event — this isn't a saga state transition, it's metadata
+for the frontend, which already polls `GET /orders/:orderId` and redirects the browser there once
+it sees a URL). See
+[`docs/decisions/0034`](../../docs/decisions/0034-stripe-checkout-dummy-integration.md).
+
 Has its own transactional outbox + relay now too (`src/outbox/`, `src/kafka/`, same pattern as
 `inventory`'s/`payments`' — `docs/decisions/0013`), producing `OrderConfirmed`/`OrderCancelled`.
 Real recovery for `RESERVATION_FAILED` orders (a background job that revisits them) still belongs
@@ -54,12 +61,15 @@ duplicate. Full reasoning in
 Produces: `OrderConfirmed` (`order.confirmed`), `OrderCancelled` (`order.cancelled`).
 `OrderPlaced` (`order.placed`) — not implemented yet; nothing currently needs it asynchronously
 since `ReserveStock` is still a synchronous gRPC call.
-Consumes: `PaymentConfirmed` (`payment.confirmed`), `PaymentFailed` (`payment.failed`).
+Consumes: `PaymentCheckoutCreated` (`payment.checkout_created`), `PaymentConfirmed`
+(`payment.confirmed`), `PaymentFailed` (`payment.failed`).
 `InventoryReserved`/`InventoryReleased` — not consumed; `orders` already gets that answer
 synchronously from the `ReserveStock`/`ReleaseStock` gRPC responses.
 
 ## Saga
-Happy path: `OrderPlaced → InventoryReserved → PaymentConfirmed → OrderConfirmed`.
+Happy path: `OrderPlaced → InventoryReserved → PaymentCheckoutCreated → PaymentConfirmed →
+OrderConfirmed`. `PaymentCheckoutCreated` doesn't move the order out of `RESERVED` — see
+`docs/decisions/0034`.
 Failure path: `PaymentFailed → InventoryReleased → OrderCancelled`.
 Both the synchronous first step (`ReserveStock`) and the async second step
 (`PaymentConfirmed`/`PaymentFailed` → `OrderConfirmed`/`OrderCancelled`, including the
@@ -67,7 +77,8 @@ Both the synchronous first step (`ReserveStock`) and the async second step
 — see `docs/decisions/0015`.
 
 ## Data ownership
-`orders-db` (Postgres, port `5435` locally): `Order`/`OrderItem` and `OutboxMessage` (the
+`orders-db` (Postgres, port `5435` locally): `Order` (including `checkoutUrl`, set once Stripe
+has a Checkout Session for it — `docs/decisions/0034`) / `OrderItem` and `OutboxMessage` (the
 transactional outbox).
 
 ## Port

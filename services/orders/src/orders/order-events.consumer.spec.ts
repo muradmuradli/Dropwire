@@ -2,7 +2,11 @@ import { OrderEventsConsumer } from './order-events.consumer';
 
 describe('OrderEventsConsumer', () => {
   let kafkaConsumer: { subscribe: jest.Mock };
-  let ordersService: { handlePaymentConfirmed: jest.Mock; handlePaymentFailed: jest.Mock };
+  let ordersService: {
+    handlePaymentConfirmed: jest.Mock;
+    handlePaymentFailed: jest.Mock;
+    handleCheckoutCreated: jest.Mock;
+  };
   let consumer: OrderEventsConsumer;
   let handleMessage: (topic: string, key: string | null, value: string) => Promise<void>;
 
@@ -11,20 +15,46 @@ describe('OrderEventsConsumer', () => {
     ordersService = {
       handlePaymentConfirmed: jest.fn().mockResolvedValue(undefined),
       handlePaymentFailed: jest.fn().mockResolvedValue(undefined),
+      handleCheckoutCreated: jest.fn().mockResolvedValue(undefined),
     };
     consumer = new OrderEventsConsumer(kafkaConsumer as never, ordersService as never);
 
     await consumer.onModuleInit();
     expect(kafkaConsumer.subscribe).toHaveBeenCalledWith(
-      ['payment.confirmed', 'payment.failed'],
+      ['payment.confirmed', 'payment.failed', 'payment.checkout_created'],
       expect.any(Function),
     );
     const subscribeCalls = kafkaConsumer.subscribe.mock.calls as [string[], typeof handleMessage][];
     handleMessage = subscribeCalls[0][1];
   });
 
-  it('subscribes to both payment topics on init', () => {
+  it('subscribes to all three payment topics on init', () => {
     expect(kafkaConsumer.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispatches a PaymentCheckoutCreated event to handleCheckoutCreated', async () => {
+    const event = {
+      id: 'event-1',
+      type: 'PaymentCheckoutCreated',
+      correlationId: 'c1',
+      payload: { orderId: 'order-1', checkoutUrl: 'https://checkout.stripe.com/cs_test_1' },
+    };
+
+    await handleMessage('payment.checkout_created', 'order-1', JSON.stringify(event));
+
+    expect(ordersService.handleCheckoutCreated).toHaveBeenCalledWith(
+      'order-1',
+      'https://checkout.stripe.com/cs_test_1',
+    );
+  });
+
+  it('drops a PaymentCheckoutCreated event with no checkoutUrl', async () => {
+    const event = { id: 'event-1', correlationId: 'c1', payload: { orderId: 'order-1' } };
+
+    await expect(
+      handleMessage('payment.checkout_created', null, JSON.stringify(event)),
+    ).resolves.toBeUndefined();
+    expect(ordersService.handleCheckoutCreated).not.toHaveBeenCalled();
   });
 
   it('dispatches a PaymentConfirmed event to handlePaymentConfirmed', async () => {

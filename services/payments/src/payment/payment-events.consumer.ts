@@ -36,11 +36,23 @@ export class PaymentEventsConsumer implements OnModuleInit {
     }
 
     const orderId = event.payload?.orderId;
-    if (!event.id || !event.correlationId || typeof orderId !== 'string') {
+    const items = event.payload?.items;
+    if (
+      !event.id ||
+      !event.correlationId ||
+      typeof orderId !== 'string' ||
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
       this.logger.error(`malformed ${topic} event (id=${event.id ?? 'unknown'}), dropping it`);
       return;
     }
 
-    await this.paymentService.handleInventoryReserved(event.id, event.correlationId, orderId);
+    await this.paymentService.handleInventoryReserved(
+      event.id,
+      event.correlationId,
+      orderId,
+      items,
+    );
   }
 }

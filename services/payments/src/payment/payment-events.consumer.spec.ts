@@ -36,7 +36,25 @@ describe('PaymentEventsConsumer', () => {
 
     await handleMessage('inventory.reserved', 'order-1', JSON.stringify(event));
 
-    expect(paymentService.handleInventoryReserved).toHaveBeenCalledWith('event-1', 'c1', 'order-1');
+    expect(paymentService.handleInventoryReserved).toHaveBeenCalledWith(
+      'event-1',
+      'c1',
+      'order-1',
+      [{ productId: 'p1', quantity: 2 }],
+    );
+  });
+
+  it('drops a message with no items, without throwing', async () => {
+    const event = {
+      id: 'event-1',
+      correlationId: 'c1',
+      payload: { orderId: 'order-1', items: [] },
+    };
+
+    await expect(
+      handleMessage('inventory.reserved', null, JSON.stringify(event)),
+    ).resolves.toBeUndefined();
+    expect(paymentService.handleInventoryReserved).not.toHaveBeenCalled();
   });
 
   it('drops a message that is not valid JSON, without throwing', async () => {
@@ -58,7 +76,7 @@ describe('PaymentEventsConsumer', () => {
     const event = {
       id: 'event-1',
       correlationId: 'c1',
-      payload: { orderId: 'order-1' },
+      payload: { orderId: 'order-1', items: [{ productId: 'p1', quantity: 1 }] },
     };
 
     await expect(handleMessage('inventory.reserved', null, JSON.stringify(event))).rejects.toThrow(

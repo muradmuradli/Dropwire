@@ -25,7 +25,11 @@ model Payment {
   // not this field, is what actually makes handling idempotent (see docs/decisions/0014).
   triggeringEventId String
   status            PaymentStatus
-  // Only set once CONFIRMED — the mock provider's own reference for this charge.
+  // Set once a Stripe Checkout Session exists for this attempt (still PENDING at that point —
+  // these two just mean "waiting on Stripe's webhook now" rather than "waiting to even start").
+  checkoutSessionId String?
+  checkoutUrl       String?
+  // Only set once CONFIRMED — Stripe's own reference for this charge (the Checkout Session id).
   providerReference String?
   // Only set once FAILED.
   failureReason     String?

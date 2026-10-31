@@ -263,6 +263,25 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('handleCheckoutCreated', () => {
+    it('stores the checkout URL on a RESERVED order', async () => {
+      await service.handleCheckoutCreated('order-1', 'https://checkout.stripe.com/cs_test_1');
+
+      expect(prisma.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'order-1', status: 'RESERVED' },
+        data: { checkoutUrl: 'https://checkout.stripe.com/cs_test_1' },
+      });
+    });
+
+    it('is a no-op when the order is not RESERVED — redelivered or late event', async () => {
+      prisma.order.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.handleCheckoutCreated('order-1', 'https://checkout.stripe.com/cs_test_1'),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('getOrder', () => {
     it('returns the order Prisma finds', async () => {
       const order = { id: 'order-1', status: 'RESERVED' };

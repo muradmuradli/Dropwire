@@ -14,15 +14,16 @@ event shares a common envelope:
 }
 ```
 
-All consumers must be idempotent (dedupe by `id`). This table is the plan — the actual JSON Schema
-files for each event (`contracts/events/`) haven't been written yet; that's intentionally left for
-when the saga logic itself gets implemented, not done upfront.
+All consumers must be idempotent (dedupe by `id`). The JSON Schema file for each event lives in
+`contracts/events/`, generated into each consuming service's own `src/generated/events/` (see
+`scripts/gen-contracts.js`) — never a shared runtime package.
 
 | Topic | Event type | Producer | Consumer(s) |
 |---|---|---|---|
 | `order.placed` | `OrderPlaced` | orders | inventory |
 | `inventory.reserved` | `InventoryReserved` | inventory | orders, payments |
 | `inventory.released` | `InventoryReleased` | inventory | orders |
+| `payment.checkout_created` | `PaymentCheckoutCreated` | payments | orders |
 | `payment.confirmed` | `PaymentConfirmed` | payments | orders |
 | `payment.failed` | `PaymentFailed` | payments | orders |
 | `order.confirmed` | `OrderConfirmed` | orders | notifications |
@@ -30,7 +31,10 @@ when the saga logic itself gets implemented, not done upfront.
 
 ## Saga flow
 
-**Happy path:** `OrderPlaced` → `InventoryReserved` → `PaymentConfirmed` → `OrderConfirmed`
+**Happy path:** `OrderPlaced` → `InventoryReserved` → `PaymentCheckoutCreated` →
+`PaymentConfirmed` → `OrderConfirmed`. `PaymentCheckoutCreated` isn't a saga state transition on
+its own (the order stays `RESERVED`) — it's how the customer's browser learns where to redirect
+for the real (test-mode) Stripe Checkout step. See `docs/decisions/0034`.
 
 **Failure path:** `PaymentFailed` → `InventoryReleased` → `OrderCancelled`
 

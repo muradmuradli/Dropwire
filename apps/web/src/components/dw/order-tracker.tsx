@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { PackageSearch, TriangleAlert } from 'lucide-react';
 import { useRequireAuth } from '../../lib/use-require-auth';
 import { useOrdersApi, type Order } from '../../lib/orders-api';
@@ -15,6 +16,12 @@ const POLL_INTERVAL_MS = 3000;
 export function OrderTracker({ orderId }: { orderId: string }) {
   const { initialized, authenticated } = useRequireAuth();
   const { getOrder } = useOrdersApi();
+  const searchParams = useSearchParams();
+  // Present only on the way *back* from Stripe (success_url/cancel_url both carry it) — used
+  // to tell "just placed, about to redirect to checkout" apart from "already been to checkout,
+  // don't redirect again" so landing back here never bounces the browser straight back to
+  // Stripe. See docs/decisions/0034.
+  const returnedFromCheckout = searchParams.get('checkout');
 
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +66,14 @@ export function OrderTracker({ orderId }: { orderId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticated, orderId]);
 
+  useEffect(() => {
+    // Only on the way *in* (no ?checkout= yet) — otherwise landing back here from Stripe would
+    // just bounce the browser straight back to the same (now-stale-feeling) Checkout Session.
+    if (returnedFromCheckout === null && order?.status === 'RESERVED' && order.checkoutUrl) {
+      window.location.href = order.checkoutUrl;
+    }
+  }, [order, returnedFromCheckout]);
+
   if (!initialized || !authenticated) {
     return (
       <section className="mx-auto max-w-2xl px-4 py-16 text-center text-muted-foreground">
@@ -86,6 +101,10 @@ export function OrderTracker({ orderId }: { orderId: string }) {
   const copy = ORDER_STATUS_COPY[order.status];
   const Icon = copy.icon;
   const polling = NON_TERMINAL.includes(order.status);
+  const awaitingCheckout =
+    order.status === 'RESERVED' && returnedFromCheckout === null && !order.checkoutUrl;
+  const leftCheckout = order.status === 'RESERVED' && returnedFromCheckout === 'cancelled';
+  const confirmingAfterCheckout = order.status === 'RESERVED' && returnedFromCheckout === 'success';
 
   return (
     <section className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
@@ -94,9 +113,31 @@ export function OrderTracker({ orderId }: { orderId: string }) {
           <Icon className="h-6 w-6 shrink-0" />
           <div>
             <h1 className="text-xl font-semibold">{copy.label}</h1>
-            <p className="text-sm text-muted-foreground">{copy.body}</p>
+            <p className="text-sm text-muted-foreground">
+              {awaitingCheckout
+                ? 'Preparing checkout…'
+                : leftCheckout
+                  ? "You left checkout without completing payment. You can try again below, or wait — we'll keep checking in case it still goes through."
+                  : confirmingAfterCheckout
+                    ? "We're confirming your payment with Stripe. This updates automatically."
+                    : copy.body}
+            </p>
           </div>
         </div>
+
+        {leftCheckout && order.checkoutUrl && (
+          <Button
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              if (order.checkoutUrl) {
+                window.location.href = order.checkoutUrl;
+              }
+            }}
+          >
+            Retry payment
+          </Button>
+        )}
 
         {polling && (
           <p className="mt-3 text-xs text-muted-foreground">
