@@ -18,12 +18,13 @@ import {
   ReserveStockResponse,
 } from '../generated/proto/dropwire/inventory/v1/inventory';
 import { OrderStatus, Prisma } from '../../generated/prisma';
+import { CatalogClient } from '../catalog/catalog-client.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { INVENTORY_CLIENT } from './inventory-client.constant';
 
-const INVENTORY_CALL_ATTEMPTS = 3;
-const INVENTORY_CALL_RETRY_DELAY_MS = 200;
+const CALL_ATTEMPTS = 3;
+const CALL_RETRY_DELAY_MS = 200;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,6 +51,7 @@ export class OrdersService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(INVENTORY_CLIENT) private readonly inventoryClient: ClientGrpc,
+    private readonly catalogClient: CatalogClient,
     metrics: MetricsService,
   ) {
     this.placedCounter = new Counter({
@@ -85,13 +87,44 @@ export class OrdersService implements OnModuleInit {
       },
     });
 
+    // Catalog has no idea inventory exists, and vice versa — nothing stops someone from
+    // ordering a productId that's been deleted from catalog since (a stale cart, or a direct
+    // API call) unless this checks for it. Deliberately before the gRPC call: there's no point
+    // reserving stock for an order we're about to reject anyway. See docs/decisions/0036.
+    let missingProductIds: string[];
+    try {
+      missingProductIds = await this.findMissingProducts(input.items);
+    } catch {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'RESERVATION_FAILED' },
+      });
+      this.placedCounter.inc({ status: 'RESERVATION_FAILED' });
+      throw new ServiceUnavailableException(
+        `could not reach catalog to verify products for order ${orderId}; check GET /orders/${orderId}`,
+      );
+    }
+
+    if (missingProductIds.length > 0) {
+      const order = await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'CANCELLED' },
+        include: { items: true },
+      });
+      this.placedCounter.inc({ status: 'CANCELLED' });
+      return {
+        order,
+        reservation: this.productNotFoundReservation(input.items, missingProductIds),
+      };
+    }
+
     // order_id is the idempotency key inventory keys its reservation off (see
     // docs/decisions/0007/0011) — generating it here, before the gRPC call, is what makes
     // retrying this same request (same orderId) safe: inventory either hasn't seen it yet,
     // or replays the exact same answer instead of reserving twice.
     let reservation: ReserveStockResponse;
     try {
-      reservation = await this.retryInventoryCall(() =>
+      reservation = await this.retryCall(() =>
         lastValueFrom(
           this.inventoryService.reserveStock({
             orderId,
@@ -148,19 +181,56 @@ export class OrdersService implements OnModuleInit {
     }
   }
 
-  private async retryInventoryCall<T>(call: () => Promise<T>): Promise<T> {
+  private async retryCall<T>(call: () => Promise<T>): Promise<T> {
     let lastError: unknown;
-    for (let attempt = 1; attempt <= INVENTORY_CALL_ATTEMPTS; attempt++) {
+    for (let attempt = 1; attempt <= CALL_ATTEMPTS; attempt++) {
       try {
         return await call();
       } catch (error) {
         lastError = error;
-        if (attempt < INVENTORY_CALL_ATTEMPTS) {
-          await sleep(INVENTORY_CALL_RETRY_DELAY_MS);
+        if (attempt < CALL_ATTEMPTS) {
+          await sleep(CALL_RETRY_DELAY_MS);
         }
       }
     }
     throw lastError;
+  }
+
+  // Checked against catalog, not inventory — a product can be out of stock and still exist,
+  // but if catalog doesn't have it at all there's nothing for inventory to even be asked
+  // about. Returns every missing productId in one pass (distinct — no point checking the same
+  // id twice in one order), not just the first, so the caller can report all of them at once,
+  // same as how an OUT_OF_STOCK response already reports every affected item, not just one.
+  private async findMissingProducts(items: PlaceOrderItem[]): Promise<string[]> {
+    const distinctIds = [...new Set(items.map((item) => item.productId))];
+    const results = await Promise.all(
+      distinctIds.map(async (productId) => ({
+        productId,
+        exists: await this.retryCall(() => this.catalogClient.productExists(productId)),
+      })),
+    );
+    return results.filter((result) => !result.exists).map((result) => result.productId);
+  }
+
+  // Synthesizes the same ReserveStockResponse shape a real gRPC call would return for a
+  // PRODUCT_NOT_FOUND outcome, purely so apps/web's existing checkout page — which already
+  // knows how to render a PRODUCT_NOT_FOUND item — needs no changes at all for this case.
+  // Items that do exist in catalog get UNSPECIFIED, not RESERVED: inventory was never asked
+  // about them, so claiming they're reserved would be a lie.
+  private productNotFoundReservation(
+    items: PlaceOrderItem[],
+    missingProductIds: string[],
+  ): ReserveStockResponse {
+    return {
+      status: ReservationStatus.RESERVATION_STATUS_PRODUCT_NOT_FOUND,
+      items: items.map((item) => ({
+        productId: item.productId,
+        status: missingProductIds.includes(item.productId)
+          ? ReservationStatus.RESERVATION_STATUS_PRODUCT_NOT_FOUND
+          : ReservationStatus.RESERVATION_STATUS_UNSPECIFIED,
+        availableQuantity: 0,
+      })),
+    };
   }
 
   async getOrder(orderId: string) {
@@ -224,7 +294,7 @@ export class OrdersService implements OnModuleInit {
       return;
     }
 
-    await this.retryInventoryCall(() =>
+    await this.retryCall(() =>
       lastValueFrom(this.inventoryService.releaseStock({ orderId, correlationId })),
     );
 
@@ -297,17 +367,37 @@ export class OrdersService implements OnModuleInit {
       throw new ConflictException(`order ${orderId} is ${order.status}, not RESERVATION_FAILED`);
     }
 
+    const items = order.items.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+    }));
+
+    // Same catalog check as placeOrder — time has passed since the original attempt, so a
+    // product that existed then could have been deleted since (see docs/decisions/0036).
+    let missingProductIds: string[];
+    try {
+      missingProductIds = await this.findMissingProducts(items);
+    } catch {
+      return order;
+    }
+    if (missingProductIds.length > 0) {
+      const updated = await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'CANCELLED' },
+        include: { items: true },
+      });
+      this.placedCounter.inc({ status: 'CANCELLED' });
+      return updated;
+    }
+
     let reservation: ReserveStockResponse;
     try {
-      reservation = await this.retryInventoryCall(() =>
+      reservation = await this.retryCall(() =>
         lastValueFrom(
           this.inventoryService.reserveStock({
             orderId,
             correlationId: order.correlationId,
-            items: order.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-            })),
+            items,
           }),
         ),
       );

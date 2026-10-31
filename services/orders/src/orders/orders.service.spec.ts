@@ -22,6 +22,7 @@ describe('OrdersService', () => {
     $transaction: jest.Mock;
   };
   let inventoryService: { reserveStock: jest.Mock; releaseStock: jest.Mock };
+  let catalogClient: { productExists: jest.Mock };
   let service: OrdersService;
 
   const validInput = {
@@ -52,8 +53,14 @@ describe('OrdersService', () => {
       releaseStock: jest.fn().mockReturnValue(of({ released: true })),
     };
     const inventoryClient = { getService: jest.fn().mockReturnValue(inventoryService) };
+    catalogClient = { productExists: jest.fn().mockResolvedValue(true) };
 
-    service = new OrdersService(prisma as never, inventoryClient as never, fakeMetrics());
+    service = new OrdersService(
+      prisma as never,
+      inventoryClient as never,
+      catalogClient as never,
+      fakeMetrics(),
+    );
     service.onModuleInit();
   });
 
@@ -152,6 +159,61 @@ describe('OrdersService', () => {
       ).rejects.toThrow('must be a positive whole number');
       expect(prisma.order.create).not.toHaveBeenCalled();
     });
+
+    it('records CANCELLED without ever calling inventory when a product no longer exists in catalog', async () => {
+      catalogClient.productExists.mockResolvedValue(false);
+
+      const result = await service.placeOrder(validInput);
+
+      expect(result.order.status).toBe('CANCELLED');
+      expect(inventoryService.reserveStock).not.toHaveBeenCalled();
+      expect(result.reservation.items).toEqual([
+        {
+          productId: 'p1',
+          status: ReservationStatus.RESERVATION_STATUS_PRODUCT_NOT_FOUND,
+          availableQuantity: 0,
+        },
+      ]);
+    });
+
+    it('only marks the actually-missing product, leaving other items UNSPECIFIED', async () => {
+      catalogClient.productExists.mockImplementation((productId: string) =>
+        Promise.resolve(productId !== 'p2'),
+      );
+      const input = {
+        ...validInput,
+        items: [
+          { productId: 'p1', quantity: 1 },
+          { productId: 'p2', quantity: 1 },
+        ],
+      };
+
+      const result = await service.placeOrder(input);
+
+      expect(result.reservation.items).toEqual([
+        {
+          productId: 'p1',
+          status: ReservationStatus.RESERVATION_STATUS_UNSPECIFIED,
+          availableQuantity: 0,
+        },
+        {
+          productId: 'p2',
+          status: ReservationStatus.RESERVATION_STATUS_PRODUCT_NOT_FOUND,
+          availableQuantity: 0,
+        },
+      ]);
+    });
+
+    it('marks RESERVATION_FAILED and returns 503 when catalog is unreachable', async () => {
+      catalogClient.productExists.mockRejectedValue(new Error('ECONNREFUSED'));
+
+      await expect(service.placeOrder(validInput)).rejects.toThrow(/could not reach catalog/);
+
+      expect(inventoryService.reserveStock).not.toHaveBeenCalled();
+      expect(prisma.order.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: 'RESERVATION_FAILED' } }),
+      );
+    }, 10000);
   });
 
   describe('handlePaymentConfirmed', () => {
@@ -386,6 +448,26 @@ describe('OrdersService', () => {
       expect(result.status).toBe('RESERVATION_FAILED');
       expect(prisma.order.update).not.toHaveBeenCalled();
     });
+
+    it('transitions to CANCELLED, without ever calling inventory, if the product was deleted since', async () => {
+      prisma.order.findUnique.mockResolvedValue(stuckOrder);
+      catalogClient.productExists.mockResolvedValue(false);
+
+      const result = await service.retryReservation('order-1');
+
+      expect(result.status).toBe('CANCELLED');
+      expect(inventoryService.reserveStock).not.toHaveBeenCalled();
+    });
+
+    it('stays RESERVATION_FAILED, without throwing, if catalog is unreachable', async () => {
+      prisma.order.findUnique.mockResolvedValue(stuckOrder);
+      catalogClient.productExists.mockRejectedValue(new Error('ECONNREFUSED'));
+
+      const result = await service.retryReservation('order-1');
+
+      expect(result.status).toBe('RESERVATION_FAILED');
+      expect(inventoryService.reserveStock).not.toHaveBeenCalled();
+    }, 10000);
   });
 
   describe('cancelStuckOrder', () => {

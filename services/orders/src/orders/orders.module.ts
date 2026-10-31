@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { DROPWIRE_INVENTORY_V1_PACKAGE_NAME } from '../generated/proto/dropwire/inventory/v1/inventory';
+import { CatalogClient } from '../catalog/catalog-client.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AdminOrdersController } from './admin-orders.controller';
 import { INVENTORY_CLIENT } from './inventory-client.constant';
@@ -32,6 +33,6 @@ import { OrdersService } from './orders.service';
     ]),
   ],
   controllers: [OrdersController, AdminOrdersController],
-  providers: [OrdersService, OrderEventsConsumer],
+  providers: [OrdersService, OrderEventsConsumer, CatalogClient],
 })
 export class OrdersModule {}

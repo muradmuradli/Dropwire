@@ -7,13 +7,16 @@ other service and decides what happens next. Calls inventory synchronously via g
 saga via Kafka events.
 
 **The saga's first two steps are implemented** (`src/orders/`). Step one, `POST /orders`: create an
-`Order`, call inventory's `ReserveStock` (retried up to 3 times, safe because that call is
-idempotent on `order_id` — see `docs/decisions/0012`), and record `RESERVED`/`CANCELLED`/
-`RESERVATION_FAILED` based on the result. `RESERVATION_FAILED` means the call itself never got a
-real answer even after retrying — a 503, not a dangling `PLACED` row. `POST /orders`'s body is
-validated by hand in `OrdersService.assertValidInput` (at least one item, each item a non-empty
-`productId` and a positive whole-number `quantity`) before anything is written to the database —
-not a DTO/class-validator pipe, since nothing else in the codebase uses that pattern yet either.
+`Order`, check every item's `productId` still exists in `catalog` (`src/catalog/catalog-client.service.ts`
+— direct HTTP, not through `gateway`; `docs/decisions/0036`; a `404` cancels the order without ever
+calling `inventory`, since `inventory` has no idea whether a product was deleted from `catalog`),
+then call inventory's `ReserveStock` (retried up to 3 times, safe because that call is idempotent
+on `order_id` — see `docs/decisions/0012`), and record `RESERVED`/`CANCELLED`/`RESERVATION_FAILED`
+based on the result. `RESERVATION_FAILED` means a call (either one) never got a real answer even
+after retrying — a 503, not a dangling `PLACED` row. `POST /orders`'s body is validated by hand in
+`OrdersService.assertValidInput` (at least one item, each item a non-empty `productId` and a
+positive whole-number `quantity`) before anything is written to the database — not a
+DTO/class-validator pipe, since nothing else in the codebase uses that pattern yet either.
 
 Step two: `OrderEventsConsumer` (`src/orders/order-events.consumer.ts`) consumes
 `PaymentConfirmed`/`PaymentFailed` and calls into `OrdersService.handlePaymentConfirmed`/
@@ -83,4 +86,5 @@ transactional outbox).
 
 ## Port
 `3003` HTTP (see `.env.example`). Calls inventory's gRPC server at `INVENTORY_GRPC_URL`
-(`localhost:4002` locally) — doesn't run its own gRPC server.
+(`localhost:4002` locally) — doesn't run its own gRPC server. Also calls `catalog` directly over
+plain HTTP at `CATALOG_URL` (`localhost:3001` locally) — see `docs/decisions/0036`.

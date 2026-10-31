@@ -17,6 +17,9 @@ already fully determined by two timestamps. Full reasoning in
 Read routes (no auth guard — product/drop browsing is public, matching how an unauthenticated
 storefront would work): `GET /products` (optional `?dropId=` filter), `GET /products/:id`,
 `GET /drops` (each annotated with its derived `status` and its `products`), `GET /drops/:id`.
+`GET /products/:id` also has a second, internal caller — `orders` hits it directly (not through
+`gateway`) on every `POST /orders`/retry, to confirm a product hasn't been deleted since it was
+last seen; see [`docs/decisions/0036`](../../docs/decisions/0036-orders-checks-catalog-before-reserving.md).
 
 Write routes (admin-only — `JwtAuthGuard` + `RolesGuard` + `@Roles('admin')`): `POST /drops`,
 `PATCH /drops/:id`, `DELETE /drops/:id`, `POST /products`, `PATCH /products/:id`,
