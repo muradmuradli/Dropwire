@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { CatalogProxyController } from './catalog-proxy/catalog-proxy.controller';
 import { HealthModule } from './health/health.module';
+import { InventoryProxyController } from './inventory-proxy/inventory-proxy.controller';
 import { MeController } from './me/me.controller';
 import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware';
 import { MetricsModule } from './metrics/metrics.module';
@@ -33,6 +34,7 @@ import { ProxyService } from './proxy/proxy.service';
     OrdersProxyController,
     AdminOrdersProxyController,
     CatalogProxyController,
+    InventoryProxyController,
   ],
   providers: [AppService, ProxyService],
 })

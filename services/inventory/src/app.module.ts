@@ -5,6 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { KafkaModule } from './kafka/kafka.module';
 import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware';
@@ -13,6 +14,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { ReservationModule } from './reservation/reservation.module';
+import { StockModule } from './stock/stock.module';
 
 @Module({
   imports: [
@@ -28,8 +30,10 @@ import { ReservationModule } from './reservation/reservation.module';
     PrismaModule,
     MetricsModule,
     RedisModule,
+    AuthModule,
     KafkaModule,
     ReservationModule,
+    StockModule,
     OutboxModule,
   ],
   controllers: [AppController],

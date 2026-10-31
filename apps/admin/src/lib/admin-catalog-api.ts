@@ -41,6 +41,11 @@ export interface PresignedUpload {
   publicUrl: string;
 }
 
+export interface Stock {
+  productId: string;
+  totalQuantity: number;
+}
+
 export function useAdminCatalogApi() {
   const apiFetch = useApiClient();
 
@@ -97,6 +102,21 @@ export function useAdminCatalogApi() {
         method: 'DELETE',
       });
       await throwIfNotOk(response);
+    },
+
+    // Provisions (or resets) stock for a product directly on inventory, via gateway's
+    // inventory proxy — see docs/decisions/0035. Needed right after creating a product:
+    // catalog and inventory are separate services with no shared database, so without this
+    // call a brand-new product would have no stock record at all and look "not available" to
+    // a customer, not just "out of stock".
+    async setStock(productId: string, quantity: number): Promise<Stock> {
+      const response = await apiFetch('/stock', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ productId, quantity }),
+      });
+      await throwIfNotOk(response);
+      return response.json() as Promise<Stock>;
     },
 
     // Returns a presigned S3 PutObject URL — the caller PUTs the file straight to uploadUrl

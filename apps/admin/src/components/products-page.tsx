@@ -30,7 +30,8 @@ const BRAND_BUTTON =
 export function ProductsPage() {
   const { initialized, authenticated } = useRequireAuth();
   const { keycloak } = useAuth();
-  const { createProduct, updateProduct, deleteProduct, getUploadUrl } = useAdminCatalogApi();
+  const { createProduct, updateProduct, deleteProduct, getUploadUrl, setStock } =
+    useAdminCatalogApi();
 
   const [products, setProducts] = useState<Product[] | null>(null);
   const [drops, setDrops] = useState<Drop[]>([]);
@@ -47,6 +48,7 @@ export function ProductsPage() {
   const [price, setPrice] = useState('');
   const [image, setImage] = useState<File | null>(null);
   const [dropId, setDropId] = useState('');
+  const [stockQuantity, setStockQuantity] = useState('');
 
   function resetForm() {
     setEditingId(null);
@@ -56,6 +58,7 @@ export function ProductsPage() {
     setPrice('');
     setImage(null);
     setDropId('');
+    setStockQuantity('');
   }
 
   function startEditing(product: Product) {
@@ -66,6 +69,9 @@ export function ProductsPage() {
     setPrice((product.priceCents / 100).toFixed(2));
     setImage(null);
     setDropId(product.dropId ?? '');
+    // There's no read endpoint for current stock yet (docs/decisions/0035 only added the write
+    // side) — left blank, not prefilled, and optional in edit mode (blank = leave stock as-is).
+    setStockQuantity('');
     setFormError(null);
   }
 
@@ -139,6 +145,16 @@ export function ProductsPage() {
       // before).
       const newImageUrl = image ? await uploadImage(image) : undefined;
 
+      const trimmedStock = stockQuantity.trim();
+      const quantity = trimmedStock === '' ? null : Number(trimmedStock);
+      if (!editingId && (quantity === null || !Number.isInteger(quantity) || quantity < 0)) {
+        throw new Error('Stock quantity is required and must be a non-negative whole number.');
+      }
+      if (quantity !== null && (!Number.isInteger(quantity) || quantity < 0)) {
+        throw new Error('Stock quantity must be a non-negative whole number.');
+      }
+
+      let productId: string;
       if (editingId) {
         const payload: UpdateProductInput = {
           name,
@@ -150,15 +166,38 @@ export function ProductsPage() {
           payload.imageUrl = newImageUrl;
         }
         await updateProduct(editingId, payload);
+        productId = editingId;
       } else {
-        await createProduct({
+        const created = await createProduct({
           name,
           description: description.trim() === '' ? undefined : description,
           priceCents,
           imageUrl: newImageUrl,
           dropId: dropId === '' ? undefined : dropId,
         });
+        productId = created.id;
       }
+
+      // Catalog and inventory are separate services with no shared database (docs/decisions/0035)
+      // — this is the call that actually makes the product orderable. Its own try/catch so a
+      // failure here (the product/edit itself already succeeded) gets a message that doesn't
+      // make it sound like nothing happened.
+      if (quantity !== null) {
+        try {
+          await setStock(productId, quantity);
+        } catch (stockErr) {
+          setFormError(
+            `Product ${editingId ? 'updated' : 'created'}, but setting its stock failed: ${
+              stockErr instanceof ApiError || stockErr instanceof Error
+                ? stockErr.message
+                : 'unknown error'
+            }. Edit it again to retry.`,
+          );
+          load();
+          return;
+        }
+      }
+
       resetForm();
       load();
     } catch (err) {
@@ -219,6 +258,18 @@ export function ProductsPage() {
               step="0.01"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
+              className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm"
+            />
+          </label>
+          <label className="text-sm">
+            {editingId ? 'Stock quantity (optional — blank leaves it unchanged)' : 'Stock quantity'}
+            <input
+              required={!editingId}
+              type="number"
+              min="0"
+              step="1"
+              value={stockQuantity}
+              onChange={(e) => setStockQuantity(e.target.value)}
               className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm"
             />
           </label>

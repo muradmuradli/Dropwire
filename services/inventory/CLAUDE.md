@@ -19,6 +19,17 @@ stop-the-tick-on-failure, why `kafkajs` directly instead of `@nestjs/microservic
 transport) in
 [`docs/decisions/0013`](../../docs/decisions/0013-transactional-outbox-relay.md).
 
+**Admin-only stock provisioning** (`src/stock/`, `POST /stock`, `JwtAuthGuard` + `RolesGuard` +
+`@Roles('admin')` — `inventory`'s own copy of the JWT auth stack, same pattern as `catalog`'s):
+upserts a product's `Stock` row and recomputes its cached Redis `stock:{productId}` counter in one
+call. Exists because `catalog` and `inventory` have no shared database or FK — creating a product
+in `apps/admin` only ever wrote to `catalog-db`, so without this a brand-new product had no
+`Stock` row at all, and `ReserveStock` correctly reported it as `PRODUCT_NOT_FOUND`, not
+`OUT_OF_STOCK`. Proxied through `gateway` (`InventoryProxyController`) — `inventory`'s only HTTP
+route reachable by a frontend; every other path in is the gRPC API, called directly by `orders`.
+Full reasoning in
+[`docs/decisions/0035`](../../docs/decisions/0035-admin-stock-provisioning.md).
+
 ## Events
 Produces: `InventoryReserved` (`inventory.reserved`), `InventoryReleased` (`inventory.released`).
 Consumes: `OrderPlaced` (`order.placed`) — triggers a reservation attempt. Not implemented yet;
@@ -47,7 +58,8 @@ root `CLAUDE.md`'s "never oversell under heavy concurrent load" claim — see
 [`docs/decisions/0020`](../../docs/decisions/0020-k6-load-tests.md) and `loadtests/README.md`.
 
 ## Port
-`3002` HTTP (see `.env.example`), `4002` gRPC (`GRPC_PORT`).
+`3002` HTTP (see `.env.example`; also needs `KEYCLOAK_URL`/`KEYCLOAK_REALM` now, for `POST
+/stock`'s guard), `4002` gRPC (`GRPC_PORT`).
 
 ## Health
 `GET /health` checks both Postgres and Redis (`RedisService.pingCheck()`), the latter with a 2s

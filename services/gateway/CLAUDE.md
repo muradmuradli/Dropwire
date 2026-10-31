@@ -11,8 +11,11 @@ admin-only routes. `src/me/me.controller.ts` (`GET /me`, `GET /me/admin-only`) i
 surface to exercise this. Rate limiting is not implemented yet. See `notes/AUTH.md` for a
 step-by-step walkthrough of this code.
 
-**Proxies to `orders` and `catalog`** (`src/orders-proxy/`, `src/catalog-proxy/`), matching
-`docs/ARCHITECTURE.md`'s `web → gateway → {orders,catalog}` paths. Both are route-for-route, not a
+**Proxies to `orders`, `catalog`, and `inventory`** (`src/orders-proxy/`, `src/catalog-proxy/`,
+`src/inventory-proxy/`), matching `docs/ARCHITECTURE.md`'s `web → gateway → {orders,catalog}`
+paths (`inventory` is otherwise reached only via `orders`' direct gRPC calls — `gateway` only
+proxies its one admin-facing HTTP route, `POST /stock`, `docs/decisions/0035`). These are
+route-for-route, not a
 generic reverse proxy, and share forwarding logic via `src/proxy/proxy.service.ts`'s
 `ProxyService` — forwards the `Authorization` header unchanged (zero trust, `notes/LEARNING.md`
 §5), passes the upstream's response back byte-for-byte via `@Res()` rather than re-wrapping it
@@ -29,6 +32,9 @@ through `AllExceptionsFilter`, and returns a `503` naming the upstream if it's u
   `POST /products/upload-url`) mirror catalog's own admin-only guard instead (`docs/decisions/0029`
   through `0033`). `CATALOG_URL` (`.env.example`) points at it — `http://localhost:3001` locally.
   Full reasoning in [`docs/decisions/0018`](../../docs/decisions/0018-gateway-catalog-proxy.md).
+- `InventoryProxyController` (`POST /stock`) mirrors `inventory`'s own admin-only guard.
+  `INVENTORY_URL` (`.env.example`) points at it — `http://localhost:3002` locally. Full reasoning
+  in [`docs/decisions/0035`](../../docs/decisions/0035-admin-stock-provisioning.md).
 
 **Automated e2e coverage exists** (`test/me.e2e-spec.ts`): no live Keycloak needed — it spins up a
 throwaway local HTTP server serving a JWKS response for an RSA key pair generated on the fly, points

@@ -38,7 +38,10 @@ computed correctly against real timestamps, `null` `dropId` on the unscheduled p
 structured `404` (via the existing `AllExceptionsFilter`) for an unknown id. Test data cleaned up
 afterward.
 
-`gateway` proxies every route above (`docs/decisions/0018`, `0029`).
+`gateway` proxies every route above (`docs/decisions/0018`, `0029`). `POST /products` only ever
+writes a catalog row — `apps/admin` is responsible for also calling `inventory`'s `POST /stock`
+(via `gateway`) to give the new product somewhere to be reserved from; `catalog` itself has no
+idea `inventory` exists. See [`docs/decisions/0035`](../../docs/decisions/0035-admin-stock-provisioning.md).
 
 **`GET /metrics`** (Prometheus text format): default process metrics plus
 `http_request_duration_seconds`. No business-specific counters here — the HTTP histogram is the
